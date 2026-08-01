@@ -1,0 +1,23 @@
+# Raw unflattened API responses (~46 MB). These are intermediate artifacts:
+# nothing downstream reads them — the loader consumes the flattened CSVs
+# next to them, which ARE committed. Regenerate by re-running the collector.
+data-pipeline/seeds/raw/**/*_raw.json
+data-pipeline/seeds/raw/weather/*.json
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.env
+
+# Node
+node_modules/
+dist/
+.vite/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
