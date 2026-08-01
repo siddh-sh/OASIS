@@ -275,7 +275,14 @@ create table embeddings (
     content             text not null,
     embedding           vector(1536)
 );
-create index idx_embeddings_vec on embeddings using ivfflat (embedding vector_cosine_ops);
+-- NOTE: the ivfflat index is deliberately NOT created here. ivfflat builds
+-- its clusters from the rows present at creation time, so building it on an
+-- empty table gives poor recall. Create it in Week 3, AFTER the embeddings
+-- are loaded:
+--   create index idx_embeddings_vec on embeddings
+--       using ivfflat (embedding vector_cosine_ops) with (lists = 100);
+-- Also revisit vector(1536) if a different embedding model is chosen —
+-- the dimension must match the model exactly.
 
 create table datasets_metadata (
     id                  bigserial primary key,
@@ -286,3 +293,37 @@ create table datasets_metadata (
     license             text,
     last_cleaning_notes text
 );
+
+-- ============================================================
+-- Auth-adjacent + agent conversation history
+-- ============================================================
+
+-- Supabase manages auth.users itself; this extends it with app-specific
+-- fields. The FK to auth.users means a deleted user cascades cleanly.
+create table profiles (
+    user_id     uuid primary key references auth.users(id) on delete cascade,
+    email       text,
+    full_name   text,
+    role        text not null default 'researcher'
+                check (role in ('researcher', 'policymaker', 'admin')),
+    institution text,
+    created_at  timestamptz not null default now()
+);
+
+create table agent_conversations (
+    id          bigserial primary key,
+    user_id     uuid references profiles(user_id) on delete cascade,
+    title       text,
+    created_at  timestamptz not null default now()
+);
+create index idx_agent_conv_user on agent_conversations (user_id, created_at desc);
+
+create table agent_messages (
+    id              bigserial primary key,
+    conversation_id bigint not null references agent_conversations(id) on delete cascade,
+    role            text not null check (role in ('user', 'assistant', 'tool')),
+    content         text not null,
+    tool_calls      jsonb,
+    created_at      timestamptz not null default now()
+);
+create index idx_agent_msg_conv on agent_messages (conversation_id, created_at);
