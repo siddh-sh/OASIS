@@ -18,7 +18,7 @@ create extension if not exists vector;
 
 create table regions (
     region_id       serial primary key,
-    name            text not null,
+    name            text not null unique,
     state           text,
     geom            geography(Polygon, 4326)
 );
@@ -37,7 +37,10 @@ create table oceanographic_stations (
     lat             double precision not null,
     lon             double precision not null,
     region_id       integer references regions(region_id),
-    geom            geography(Point, 4326)
+    geom            geography(Point, 4326),
+    -- A station is uniquely identified by where it is and what kind it is.
+    -- Without this, re-running the loader silently duplicates every station.
+    unique (lat, lon, station_type)
 );
 create index idx_ocean_stations_geom on oceanographic_stations using gist (geom);
 
@@ -62,7 +65,10 @@ create table oceanographic_readings (
     dissolved_oxygen    numeric,                -- not yet sourced live — reserved for Week 2+
     ph                  numeric,                -- not yet sourced live — reserved for Week 2+
     source              text not null,
-    created_at          timestamptz not null default now()
+    created_at          timestamptz not null default now(),
+    -- Idempotent re-load: SST and chlorophyll arrive as separate rows from
+    -- separate products, so source is part of the key.
+    unique (station_id, "timestamp", source)
 );
 create index idx_ocean_readings_station_time on oceanographic_readings (station_id, "timestamp");
 
@@ -127,7 +133,8 @@ create table weather_observations (
     wind_speed_kmh      numeric,
     pressure_hpa        numeric,
     source              text not null default 'Open-Meteo',
-    created_at          timestamptz not null default now()
+    created_at          timestamptz not null default now(),
+    unique (station_id, obs_date, source)
 );
 create index idx_weather_region_date on weather_observations (region_id, obs_date);
 
