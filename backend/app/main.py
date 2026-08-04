@@ -1,7 +1,17 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import admin, agent, analytics, auth, fisheries, molecular, ocean, species, weather
+from app.api import (
+    admin,
+    agent,
+    analytics,
+    auth,
+    fisheries,
+    molecular,
+    ocean,
+    species,
+    weather,
+)
 from app.core.config import get_settings
 
 settings = get_settings()

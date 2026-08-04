@@ -19,15 +19,15 @@ For a fresh database, `alembic upgrade head` applies schema.sql for you and
 apply_schema.py becomes unnecessary (kept only as the documented
 connection-check / --reset convenience tool).
 """
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Sequence, Union
 
 from alembic import op
 
 revision: str = "0001"
-down_revision: Union[str, None] = None
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+down_revision: str | None = None
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 SCHEMA_SQL = Path(__file__).resolve().parents[2] / "db" / "schema.sql"
 

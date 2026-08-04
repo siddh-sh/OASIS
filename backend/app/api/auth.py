@@ -3,13 +3,13 @@ hashing here, Supabase already owns that (flow.md Phase 2)."""
 import httpx
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.core.security import current_user
 from app.db.models import Profile
 from app.db.session import get_db
 from app.schemas.auth import AuthTokenResponse, LoginRequest, ProfileOut, SignupRequest
-from sqlalchemy.orm import Session
 
 _bearer = HTTPBearer()
 
@@ -92,7 +92,6 @@ async def logout(
         resp = await client.post(url, headers=headers)
     if resp.status_code >= 400:
         raise HTTPException(resp.status_code, "logout failed upstream")
-    return None
 
 
 @router.get("/me", response_model=ProfileOut)

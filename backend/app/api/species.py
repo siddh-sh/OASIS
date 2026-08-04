@@ -7,7 +7,12 @@ from sqlalchemy.orm import Session
 from app.db.models import Species, SpeciesOccurrence
 from app.db.session import get_db
 from app.schemas.common import BBox
-from app.schemas.species import SpeciesOccurrenceOut, SpeciesOccurrencesPage, SpeciesOut, SpeciesPage
+from app.schemas.species import (
+    SpeciesOccurrenceOut,
+    SpeciesOccurrencesPage,
+    SpeciesOut,
+    SpeciesPage,
+)
 from app.services.geo import bbox_filter
 
 router = APIRouter(prefix="/api/species", tags=["species"])

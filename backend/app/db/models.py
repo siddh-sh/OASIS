@@ -19,7 +19,6 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Numeric,
-    String,
     Text,
     UniqueConstraint,
     func,

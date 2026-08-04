@@ -1,0 +1,61 @@
+# Local full-stack dev only. Production is Supabase (DB/Auth/vector) +
+# Render (backend) + Vercel (frontend) — see flow.md §2/§7. This exists so
+# a developer can `docker compose up` against a local Postgres instead of
+# burning Supabase free-tier quota while iterating.
+#
+# Auth still needs a real Supabase project even with the local db: Supabase
+# Auth's REST API (backend/app/api/auth.py) isn't something this compose
+# file can replicate locally. Copy .env.example to .env and fill in
+# SUPABASE_URL/SUPABASE_ANON_KEY/SUPABASE_SERVICE_ROLE_KEY for auth to work;
+# DATABASE_URL below is overridden to point at the local `db` service
+# regardless of what's in .env.
+services:
+  db:
+    build:
+      context: ./docker
+      dockerfile: postgres.Dockerfile
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      # schema.sql itself creates the postgis/vector extensions and all
+      # tables — mounted as an init script so a fresh volume is ready on
+      # first boot, same DDL apply_schema.py runs against Supabase.
+      - ./backend/db/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/postgres
+      CORS_ORIGINS: http://localhost:5173
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ./frontend
+    environment:
+      VITE_API_BASE_URL: http://localhost:8000
+    ports:
+      - "5173:5173"
+    depends_on:
+      - backend
+
+volumes:
+  pgdata:

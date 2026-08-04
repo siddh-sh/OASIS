@@ -39,7 +39,8 @@ def list_stations(
 
     total = db.scalar(select(func.count()).select_from(stmt.subquery()))
     rows = db.scalars(stmt.order_by(OceanographicStation.station_id).limit(limit).offset(offset)).all()
-    return StationsPage(items=[StationOut.model_validate(r) for r in rows], total=total or 0, limit=limit, offset=offset)
+    items = [StationOut.model_validate(r) for r in rows]
+    return StationsPage(items=items, total=total or 0, limit=limit, offset=offset)
 
 
 @router.get("/readings", response_model=ReadingsPage)
@@ -61,7 +62,8 @@ def list_readings(
 
     total = db.scalar(select(func.count()).select_from(stmt.subquery()))
     rows = db.scalars(stmt.order_by(OceanographicReading.timestamp.desc()).limit(limit).offset(offset)).all()
-    return ReadingsPage(items=[ReadingOut.model_validate(r) for r in rows], total=total or 0, limit=limit, offset=offset)
+    items = [ReadingOut.model_validate(r) for r in rows]
+    return ReadingsPage(items=items, total=total or 0, limit=limit, offset=offset)
 
 
 @router.get("/readings/summary", response_model=list[ReadingsSummaryOut])

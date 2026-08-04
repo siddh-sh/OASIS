@@ -1,0 +1,56 @@
+name: Backend CI/CD
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "backend/**"
+      - ".github/workflows/backend-ci.yml"
+  pull_request:
+    paths:
+      - "backend/**"
+      - ".github/workflows/backend-ci.yml"
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt ruff
+
+      - name: Lint (ruff)
+        run: ruff check app tests alembic
+
+      # No DATABASE_URL/SUPABASE_* secrets are configured for CI here — the
+      # DB/Supabase-gated tests (see tests/conftest.py's requires_db /
+      # requires_supabase_auth markers) skip automatically rather than
+      # failing, same as running locally without a Supabase project.
+      - name: Test (pytest)
+        run: pytest -v
+
+  deploy:
+    needs: lint-and-test
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Render deploy
+        env:
+          DEPLOY_HOOK: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+        run: |
+          if [ -z "$DEPLOY_HOOK" ]; then
+            echo "RENDER_DEPLOY_HOOK_URL not set — skipping deploy (Render service not created yet, see docs/architecture.md)."
+            exit 0
+          fi
+          curl -fsS -X POST "$DEPLOY_HOOK"

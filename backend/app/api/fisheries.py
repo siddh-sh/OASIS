@@ -49,7 +49,9 @@ def list_catch(
 
 @router.get("/summary", response_model=FisheriesSummaryOut)
 def summary(
-    region: str | None = Query(default=None, description="region name (only affects granular_catch; totals are national)"),
+    region: str | None = Query(
+        default=None, description="region name — only affects granular_catch, totals are national"
+    ),
     start_year: int | None = None,
     end_year: int | None = None,
     db: Session = Depends(get_db),
