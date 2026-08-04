@@ -1,0 +1,61 @@
+@import "tailwindcss";
+
+@theme {
+  /* Deep-water palette — this is a research/policy tool, not a generic admin
+     template, so the palette leans marine (teal/ink) rather than default
+     Tailwind blue-gray. */
+  --color-ocean-950: #041f2e;
+  --color-ocean-900: #06283f;
+  --color-ocean-800: #0a3b55;
+  --color-ocean-700: #0f5271;
+  --color-ocean-600: #146b8f;
+  --color-ocean-500: #1a86ac;
+  --color-ocean-400: #3ba3c7;
+  --color-ocean-300: #7cc4dd;
+  --color-ocean-200: #b7e0ee;
+  --color-ocean-100: #e0f3f8;
+  --color-ocean-50: #f2fafc;
+
+  --color-kelp-500: #1f9d7a;
+  --color-kelp-400: #35b990;
+
+  --color-coral-500: #e0623f;
+  --color-coral-400: #ef8261;
+
+  --color-amber-500: #d99a2b;
+
+  --font-sans: 'Segoe UI', system-ui, -apple-system, Roboto, sans-serif;
+  --font-mono: ui-monospace, 'Cascadia Code', Consolas, monospace;
+}
+
+:root {
+  color-scheme: light dark;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  background: var(--color-ocean-50);
+  color: var(--color-ocean-950);
+}
+
+@media (prefers-color-scheme: dark) {
+  body {
+    background: var(--color-ocean-950);
+    color: var(--color-ocean-100);
+  }
+}
+
+/* Leaflet needs an explicit height on its container, and its own CSS is
+   imported per-component via 'leaflet/dist/leaflet.css'. */
+.leaflet-container {
+  width: 100%;
+  height: 100%;
+  border-radius: 0.5rem;
+}
