@@ -77,7 +77,7 @@ Open `.env` and paste in your `DATABASE_URL`. While you're in Project Settings �
 
 ```bash
 python backend/db/apply_schema.py --check    # verify connection + extensions first
-python backend/db/apply_schema.py            # create all 15 tables
+python backend/db/apply_schema.py            # create all 18 tables
 ```
 
 `--check` prints the Postgres version, whether `postgis`/`vector` are present, and a row count per table. Run it first — it separates "can't connect" from "schema is broken", which are very different problems.
@@ -88,7 +88,7 @@ Useful flags:
 |---|---|
 | `--check` | Connection and extension check only. No writes. |
 | *(none)* | Apply `schema.sql`. |
-| `--reset` | **Drops all 15 tables**, then recreates. Destroys data — fine in Week 1, dangerous later. |
+| `--reset` | **Drops all 18 tables**, then recreates. Destroys data — fine in Week 1, dangerous later. |
 
 The script maps the two most common failures to specific hints: `Network is unreachable` → you used the direct connection string; `password authentication failed` → wrong password or an unencoded special character.
 
@@ -100,8 +100,6 @@ The script maps the two most common failures to specific hints: `Network is unre
 python data-pipeline/cleaning/load_seeds.py
 ```
 
-*(Not written yet — this is the next task after the schema applies cleanly.)*
-
 Loads the committed CSVs in `data-pipeline/seeds/raw/` into the tables. Idempotent via the natural keys already in the schema (`molecular_records.process_id`, `species_occurrences(source, external_id)`, `sensor_readings(station_id, obs_date, source)`), so re-running inserts only genuinely new rows instead of duplicating.
 
 ---
@@ -112,18 +110,44 @@ Loads the committed CSVs in `data-pipeline/seeds/raw/` into the tables. Idempote
 python backend/db/apply_schema.py --check
 ```
 
-Expected once loading is done — roughly:
+Expected once loading is done — these are the actual counts from a verified
+load, not estimates:
 
 | Table | Rows |
 |---|---|
-| `oceanographic_readings` | ~84,700 (SST + chlorophyll) |
-| `weather_observations` | ~13,000 |
-| `species_occurrences` | ~10,000 (OBIS + GBIF) |
-| `sensor_readings` | ~5,000 |
-| `molecular_records` | ~2,000 |
-| `species` | ~1,500 (deduplicated across four sources) |
+| `oceanographic_readings` | 56,424 (41,678 SST + 14,746 chlorophyll) |
+| `weather_observations` | 13,068 |
+| `species_occurrences` | 9,994 (6,000 OBIS + 3,994 GBIF) |
+| `sensor_readings` | 5,066 |
+| `molecular_records` | 1,993 |
+| `species` | 1,431 (deduplicated across four sources) |
+| `oceanographic_stations` | 666 |
 | `fisheries_national_totals` | 65 |
-| `oceanographic_stations` | 31 (18 coastal anchors + 13 buoys) |
+| `regions` | 10 |
+| `datasets_metadata` | 8 |
+
+Two counts routinely surprise people:
+
+- **`oceanographic_readings` is well below the 84,714 rows in the seed
+  CSVs.** The loader skips satellite grid cells whose value is null — those
+  are land pixels, roughly a third of every grid. 56,424 is a complete
+  load, not a truncated one.
+- **`oceanographic_stations` is 666, not the 31 named stations.** Each
+  satellite grid cell that carries at least one reading is registered as a
+  `satellite-grid` station alongside the 18 coastal anchors and 13 buoys.
+
+`fisheries_catch`, `profiles`, `embeddings`, `ml_predictions`,
+`anomaly_events`, `recommendations`, `agent_conversations` and
+`agent_messages` are all expected to be **0** at this stage — they are
+populated by Phases 4–5, or (for `fisheries_catch`) by CMFRI data that has
+to be transcribed by hand.
+
+Finally, tell Alembic the schema is already present, so future changes go
+through migrations rather than `apply_schema.py`:
+
+```bash
+cd backend && alembic stamp 0001
+```
 
 ---
 

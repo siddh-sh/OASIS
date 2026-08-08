@@ -97,7 +97,7 @@ The draft schema in `flow.md` §12.1 was written before any real data existed. N
 | `fisheries_catch` | Left as designed but **empty** until CMFRI's state/species-level reports are entered manually (CMFRI has no API, per `flow.md` §16.5) |
 | `molecular_records` | `processid`→`process_id` as the idempotent natural key, `nuc`→`barcode_sequence`; kept `bin_uri` (BOLD's own species-cluster ID — directly useful for the eDNA similarity-search Should-Have) |
 
-`schema.sql` has been structurally validated (15 tables, 11 indexes, balanced parens, reserved words like `"timestamp"`/`"order"` quoted) but **not executed against a live database** — there's no Supabase instance provisioned yet.
+`schema.sql` has been structurally validated (18 tables, 11 indexes, balanced parens, reserved words like `"timestamp"`/`"order"` quoted) but **not executed against a live database** — there's no Supabase instance provisioned yet.
 
 ## What's next (do these in order)
 

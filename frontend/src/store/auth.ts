@@ -98,6 +98,14 @@ export const useAuthStore = create<AuthState>()(
     }),
     {
       name: 'oasis-auth',
+      // Only the tokens are persisted — `status` is deliberately NOT, because
+      // a stored "authenticated" would claim a live session even after the
+      // token had expired or been revoked.
+      //
+      // Consequence: after a refresh the store holds a token but status is
+      // back at 'idle'. Authentication is therefore gated on the token itself
+      // (see useAuth), and `restoreSession` below revalidates it against
+      // /auth/me on mount, clearing the session if the server rejects it.
       partialize: (state) => ({ accessToken: state.accessToken, refreshToken: state.refreshToken }),
     },
   ),

@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { AppLayout } from '@/components/AppLayout'
 import { RequireAuth } from '@/components/RequireAuth'
@@ -13,8 +14,19 @@ import { RiskAlertsPage } from '@/pages/RiskAlertsPage'
 import { SettingsPage } from '@/pages/SettingsPage'
 import { SpeciesExplorerPage } from '@/pages/SpeciesExplorerPage'
 import { WeatherExplorerPage } from '@/pages/WeatherExplorerPage'
+import { useAuthStore } from '@/store/auth'
 
 function App() {
+  // A refresh restores the persisted token but not the profile (status is
+  // intentionally not persisted). Revalidate once on mount: fetchProfile
+  // loads the profile on success and clears the session on a 401, so a
+  // stale token can't keep the user "logged in" against a server that has
+  // already rejected it.
+  useEffect(() => {
+    const { accessToken, profile, fetchProfile } = useAuthStore.getState()
+    if (accessToken && !profile) void fetchProfile()
+  }, [])
+
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />

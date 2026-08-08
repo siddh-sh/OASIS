@@ -1,2 +1,8 @@
 requests>=2.32
 pandas>=2.2
+
+# Needed by cleaning/load_seeds.py and backend/db/apply_schema.py, which the
+# README's setup sequence runs straight after installing this file. Pinned to
+# match backend/requirements.txt so the two never diverge.
+psycopg2-binary==2.9.12
+python-dotenv==1.0.1
