@@ -51,13 +51,44 @@ def test_species_get_404_for_missing_id(client):
 
 
 @requires_db
-def test_fisheries_summary_has_national_totals(client):
+def test_fisheries_summary_has_both_grains(client):
     resp = client.get("/api/fisheries/summary")
     assert resp.status_code == 200
     body = resp.json()
+    # Two different measurements, deliberately not summed: FAO national
+    # annual landings, and Sea Around Us per-taxon reconstruction.
     assert len(body["national_totals"]) > 0
-    # fisheries_catch is genuinely empty pending CMFRI data — see schema.sql
-    assert body["granular_catch"] == []
+    assert len(body["granular_catch"]) > 0
+    # A sample, not the series — /catch is the paginated endpoint.
+    assert len(body["granular_catch"]) <= 50
+
+
+@requires_db
+def test_fisheries_catch_returns_species_resolved_rows(client):
+    resp = client.get("/api/fisheries/catch", params={"limit": 100})
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["total"] > 10_000, "Sea Around Us load should give ~14k taxon-year rows"
+    assert all(r["source"] == "SAU" for r in body["items"])
+    # Some rows resolve to a species; others are SAU's family/order-level
+    # aggregates and its unattributed "Others" bucket, which carry a real
+    # tonnage but no species. Both are expected — see schema.sql.
+    assert any(r["species_id"] is not None for r in body["items"])
+    assert all(r["catch_weight_kg"] > 0 for r in body["items"])
+
+
+@requires_db
+def test_fisheries_catch_species_filter_narrows_results(client):
+    unfiltered = client.get("/api/fisheries/catch", params={"limit": 1}).json()["total"]
+    sardine = client.get("/api/species", params={"q": "Sardinella longiceps", "limit": 1}).json()
+    assert sardine["items"], "expected Sea Around Us to have contributed this species"
+    species_id = sardine["items"][0]["species_id"]
+
+    resp = client.get("/api/fisheries/catch", params={"species_id": species_id, "limit": 200})
+    assert resp.status_code == 200
+    body = resp.json()
+    assert 0 < body["total"] < unfiltered
+    assert all(r["species_id"] == species_id for r in body["items"])
 
 
 @requires_db

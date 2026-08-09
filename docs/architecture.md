@@ -70,7 +70,7 @@ those hops are unimplemented rather than broken.
 
 | Layer | State |
 |---|---|
-| **Data sources → `data-pipeline/collectors/`** | Live. 7 collectors, ~114K real records committed to `data-pipeline/seeds/raw/`, refreshed daily/weekly via GitHub Actions. |
+| **Data sources → `data-pipeline/collectors/`** | Live. 8 collectors, ~129K real records committed to `data-pipeline/seeds/raw/`. Six are refreshed daily/weekly via GitHub Actions; `sea_around_us.py` is a versioned historical reconstruction (1950–2019) and is pulled by hand, since polling it could never return anything new. |
 | **`data-pipeline/cleaning/load_seeds.py`** | Live, deterministic. This *is* the cleaning logic Phase 5's `integration_cleaning_agent.py` will later wrap with an LLM narration layer — it isn't a placeholder, it's the reference implementation. |
 | **Supabase (Postgres+PostGIS+pgvector+Auth)** | Schema (`backend/db/schema.sql`) and apply tooling exist; no project has been provisioned in this environment, so the schema has never been applied to a live database and no rows exist yet. |
 | **`backend/app/` (FastAPI)** | Live. Every read endpoint in `flow.md` §11 (excluding analytics/agent) is implemented against SQLAlchemy models that mirror `schema.sql` 1:1. Auth proxies to Supabase Auth's REST API. `analytics/*` and `agent/*` are 501 stubs. |

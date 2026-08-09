@@ -18,7 +18,7 @@ export function SpeciesExplorerPage() {
       <div>
         <h1 className="text-xl font-semibold text-ocean-950 dark:text-ocean-50">Species / Biodiversity Explorer</h1>
         <p className="text-sm text-ocean-500">
-          Deduplicated across OBIS, GBIF, BOLD and FAO by binomial scientific name.
+          Deduplicated across OBIS, GBIF, BOLD and Sea Around Us by binomial scientific name.
         </p>
       </div>
 

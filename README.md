@@ -18,7 +18,7 @@ This README tracks what's actually built.
 
 ```mermaid
 flowchart LR
-    Sources["6 real data sources\n(NOAA/INCOIS, Open-Meteo, OBIS, GBIF,\nFAO/OWID, BOLD)"] --> Pipeline[data-pipeline/ collectors]
+    Sources["7 real data sources\n(NOAA/INCOIS, Open-Meteo, OBIS, GBIF,\nFAO/OWID, Sea Around Us, BOLD)"] --> Pipeline[data-pipeline/ collectors]
     Pipeline --> DB[(Postgres + PostGIS + pgvector\nSupabase)]
     DB --> API[FastAPI backend]
     API --> UI[React frontend]
@@ -34,7 +34,7 @@ for the schema.
 
 | Phase | What | Status |
 |---|---|---|
-| 0 | Data pipeline: 7 real-data collectors, ~114K seed records | Done — DB apply/load untested against a live Supabase project (none configured in this environment) |
+| 0 | Data pipeline: 8 real-data collectors, ~129K seed records | Done — schema applied and data loaded into a live Supabase project; row counts verified |
 | 1 | FastAPI backend core: SQLAlchemy models, read API (6 domains), Alembic baseline | Done |
 | 2 | Auth: Supabase Auth proxy + JWT verification | Done |
 | 3 | React frontend: layout, auth, 6 domain explorer pages | Done |
@@ -60,7 +60,7 @@ pip install -r data-pipeline/requirements.txt
 cp .env.example .env   # fill in DATABASE_URL, SUPABASE_* — see docs/supabase-setup.md
 python backend/db/apply_schema.py --check   # verify connection + extensions
 python backend/db/apply_schema.py           # create schema
-python data-pipeline/cleaning/load_seeds.py # load the committed ~114K real records
+python data-pipeline/cleaning/load_seeds.py # load the committed ~129K real records
 ```
 
 Full walkthrough: [`docs/supabase-setup.md`](docs/supabase-setup.md).
@@ -100,7 +100,7 @@ for ML, LangGraph + Claude API for the agent pipeline. Full rationale in
 ## No synthetic data
 
 Every number in this app traces to a real ingested record from a cited
-public source (NOAA, OBIS, GBIF, FAO/OWID, BOLD, Open-Meteo) or a model
+public source (NOAA, OBIS, GBIF, FAO/OWID, Sea Around Us, BOLD, Open-Meteo) or a model
 trained on one — see `data-pipeline/collectors/*.py` docstrings for each
 source's API and
 [`docs/developer-c-week1-flow.md`](docs/developer-c-week1-flow.md) for how

@@ -171,7 +171,10 @@ class FisheriesNationalTotal(Base):
 
 class FisheriesCatch(Base):
     __tablename__ = "fisheries_catch"
-    __table_args__ = (Index("idx_fisheries_region_date", "region_id", "catch_date"),)
+    __table_args__ = (
+        Index("idx_fisheries_region_date", "region_id", "catch_date"),
+        UniqueConstraint("source", "external_id", name="uq_fisheries_catch_source_external"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     species_id: Mapped[int | None] = mapped_column(ForeignKey("species.species_id"))
@@ -180,6 +183,7 @@ class FisheriesCatch(Base):
     catch_weight_kg: Mapped[float] = mapped_column(Numeric, nullable=False)
     gear_type: Mapped[str | None] = mapped_column(Text)
     source: Mapped[str] = mapped_column(Text, nullable=False)
+    external_id: Mapped[str | None] = mapped_column(Text)
 
 
 class MolecularRecord(Base):

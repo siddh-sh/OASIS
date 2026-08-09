@@ -26,10 +26,13 @@ def list_catch(
     offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
 ):
-    """Granular catch by region/species/gear. Currently returns an empty
-    page for any real query — fisheries_catch is empty pending manually
-    transcribed CMFRI data (CMFRI has no public API). See /summary for the
-    real national annual totals that do exist."""
+    """Granular catch by region/species/date — Sea Around Us reconstructed
+    catch per taxon per EEZ, 1950-2019. `species_id` is null for the rows
+    SAU reports at family/order level or under its unattributed "Others"
+    bucket; `gear_type` is null throughout because SAU's gear breakdown does
+    not decompose by species (see data-pipeline/collectors/sea_around_us.py).
+    See /summary for FAO national annual totals, which measure something
+    different and must not be summed with these."""
     stmt = select(FisheriesCatch)
     if region:
         stmt = stmt.join(Region, Region.region_id == FisheriesCatch.region_id).where(Region.name == region)
@@ -66,7 +69,11 @@ def summary(
     catch_stmt = select(FisheriesCatch)
     if region:
         catch_stmt = catch_stmt.join(Region, Region.region_id == FisheriesCatch.region_id).where(Region.name == region)
-    catch_rows = db.scalars(catch_stmt.limit(1000)).all()
+    # A sample, not the series. The 1000-row limit here dated from when
+    # fisheries_catch was empty; it now holds 14,214 rows and nothing consumes
+    # this field in bulk. Callers wanting the real series use /catch, which is
+    # filterable and paginated.
+    catch_rows = db.scalars(catch_stmt.order_by(FisheriesCatch.catch_date.desc()).limit(50)).all()
 
     return FisheriesSummaryOut(
         national_totals=[FisheriesNationalTotalOut.model_validate(r) for r in totals],

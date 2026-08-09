@@ -46,9 +46,17 @@ written by hand.
 
 **`fisheries_national_totals`** — `country`, `year`, `catch_metric_tons`, `source` (default `FAO-via-OWID`). Unique on `(country, year, source)`. **Populated, real.**
 
-**`fisheries_catch`** — `species_id` FK, `region_id` FK, `catch_date`, `catch_weight_kg`, `gear_type`, `source`. **Currently empty.**
+**`fisheries_catch`** — `species_id` FK (nullable), `region_id` FK, `catch_date`, `catch_weight_kg`, `gear_type`, `source` (`SAU`), `external_id`. Unique on `(source, external_id)`. **Populated, real: 14,214 rows.**
 
-> **Reconciliation:** FAO's real data is national-annual-aggregate only — it cannot honestly populate a granular `(species_id, region_id, date)` table. Split into two tables rather than forcing a fake breakdown; `fisheries_catch` stays as designed for CMFRI data, added manually since CMFRI has no public API.
+> **Reconciliation:** FAO's real data is national-annual-aggregate only — it cannot honestly populate a granular `(species_id, region_id, date)` table, so it lives in `fisheries_national_totals` instead. `fisheries_catch` is populated from **Sea Around Us** (UBC, Pauly & Zeller), whose catch reconstruction *is* broken down by taxon and year within each EEZ: 14,214 taxon-year rows across the India-mainland and Andaman & Nicobar EEZs, 1950–2019, 110 species resolved.
+>
+> **The two tables are not summable.** FAO reports official landings; SAU reconstructs total extraction including estimated discards and unreported/illegal catch. They measure different things.
+>
+> Three deliberate nulls: `species_id` is null for SAU's ~118 family/order-level aggregates (Penaeidae, Decapoda — genuinely not species) and for its unattributed `"Others"` bucket, which is kept rather than dropped because discarding real catch would bias every total downward. `gear_type` is null throughout — SAU's gear breakdown is a parallel aggregation of the same total, not a species×gear crosstab, so filling it would double-count.
+>
+> `external_id` is `"<eez_id>:<sau_entity_id>:<year>"`, added in migration `0002` to give the table the unique natural key it originally lacked — without it `ON CONFLICT DO NOTHING` had nothing to target and reload would duplicate every row.
+>
+> **License: CC BY-NC-SA 4.0** — non-commercial, share-alike. The only non-permissive source in the project. Recorded in `datasets_metadata`; cite per https://seaaroundus.org/citation-policy/
 
 ## Molecular / eDNA
 

@@ -94,7 +94,7 @@ The draft schema in `flow.md` §12.1 was written before any real data existed. N
 | `weather_observations` | Kept real `temp_max_c` + `temp_min_c` rather than collapsing to one `air_temp` — max matters for later heatwave detection |
 | `species_occurrences` | Added OBIS's bonus `sst`/`sss`/`bathymetry`/`shoredistance`; null for GBIF rows. Free cross-validation against our own ocean data |
 | `fisheries_national_totals` | **New table.** FAO data is national-aggregate only and genuinely does not fit `fisheries_catch(species_id, region_id, …)`. Splitting is more honest than forcing a fake species/region breakdown |
-| `fisheries_catch` | Left as designed but **empty** until CMFRI's state/species-level reports are entered manually (CMFRI has no API, per `flow.md` §16.5) |
+| `fisheries_catch` | Left as designed, and **populated from Sea Around Us** rather than CMFRI — SAU's peer-reviewed reconstruction is broken down by taxon and year per EEZ and has a public API, so it fits this table without the manual transcription CMFRI would have required. 14,214 rows; see `docs/database-schema.md` for the reconciliation notes |
 | `molecular_records` | `processid`→`process_id` as the idempotent natural key, `nuc`→`barcode_sequence`; kept `bin_uri` (BOLD's own species-cluster ID — directly useful for the eDNA similarity-search Should-Have) |
 
 `schema.sql` has been structurally validated (18 tables, 11 indexes, balanced parens, reserved words like `"timestamp"`/`"order"` quoted) but **not executed against a live database** — there's no Supabase instance provisioned yet.

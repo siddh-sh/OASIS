@@ -43,6 +43,7 @@ RAW = ROOT / "data-pipeline" / "seeds" / "raw"
 
 sys.path.insert(0, str(ROOT / "data-pipeline" / "collectors"))
 from open_meteo import ANCHOR_POINTS  # noqa: E402  single source of truth for coastal stations
+from sea_around_us import SAU_REGIONS  # noqa: E402  single source of truth for the Indian EEZs
 
 BATCH = 5000
 
@@ -117,8 +118,13 @@ def insert(cur, sql, rows, label):
 # ----------------------------------------------------------------- loaders
 
 def load_regions(cur):
+    # Coastal states (from the weather anchor points), plus open ocean for
+    # buoys/satellite cells, plus the two Sea Around Us EEZs that fisheries
+    # catch is reported against. EEZs have no `state` — they are maritime
+    # zones, not administrative divisions.
     names = sorted({state for state, *_ in ANCHOR_POINTS}) + [OPEN_OCEAN]
     rows = [(n, n if n != OPEN_OCEAN else None) for n in names]
+    rows += [(eez_name, None) for _, eez_name in SAU_REGIONS]
     insert(cur,
            "insert into regions (name, state) values %s on conflict (name) do nothing",
            rows, "regions")
@@ -257,12 +263,28 @@ def load_species(cur):
                 if not entry.get(col):
                     entry[col] = clean_str(r.get(col))
 
-    rows = [(name, e.get("kingdom"), e.get("phylum"), e.get("class"),
-             e.get("order"), e.get("family"), e.get("genus"))
+    # Sea Around Us: names its taxa in a `scientific_name` column and supplies
+    # a real common name, which none of the other three sources provide. Only
+    # its binomials become species rows — SAU also reports family- and
+    # order-level aggregates (Penaeidae, Decapoda) that are not species.
+    for r in read_csv(RAW / "fisheries" / "fisheries_catch_sau.csv"):
+        name = clean_str(r.get("scientific_name"))
+        if not name or len(name.split()) < 2:
+            continue
+        entry = merged.setdefault(name, {})
+        if not entry.get("common_name"):
+            entry["common_name"] = clean_str(r.get("common_name"))
+
+    rows = [(name, e.get("common_name"), e.get("kingdom"), e.get("phylum"),
+             e.get("class"), e.get("order"), e.get("family"), e.get("genus"))
             for name, e in sorted(merged.items())]
+    # DO UPDATE (not DO NOTHING) purely to backfill common_name onto species
+    # first inserted by a source that had none; coalesce means an existing
+    # value is never overwritten.
     insert(cur,
-           'insert into species (scientific_name, kingdom, phylum, class, "order", '
-           'family, genus) values %s on conflict (scientific_name) do nothing',
+           'insert into species (scientific_name, common_name, kingdom, phylum, class, '
+           '"order", family, genus) values %s on conflict (scientific_name) do update '
+           'set common_name = coalesce(species.common_name, excluded.common_name)',
            rows, "species")
 
     cur.execute("select scientific_name, species_id from species")
@@ -307,6 +329,57 @@ def load_fisheries(cur):
            "insert into fisheries_national_totals (country, year, catch_metric_tons) "
            "values %s on conflict (country, year, source) do nothing",
            rows, "fisheries_national_totals")
+
+
+def load_fisheries_catch(cur, regions, species):
+    """Species-resolved catch from Sea Around Us (see the collector's docstring
+    for why this is separate from fisheries_national_totals).
+
+    Three honest gaps, all deliberate:
+      * species_id is NULL for SAU's family/order-level aggregates — they are
+        not species and are not invented as such.
+      * species_id is also NULL for SAU's "Others" series, which carries real
+        catch that SAU does not attribute to any taxon (64,125 t for mainland
+        India in 1950 alone). It is kept rather than dropped: discarding it
+        would silently bias every total-catch aggregate — and the ML target —
+        downward. It gets a stable synthetic key instead of SAU's entity_id,
+        which is null for this series.
+      * gear_type is NULL throughout: SAU's gear breakdown is a parallel
+        aggregation of the same catch, not a species x gear crosstab, so
+        filling it would double every total.
+
+    SAU reports tonnes; the column is catch_weight_kg, so x1000.
+    """
+    rows = []
+    for r in read_csv(RAW / "fisheries" / "fisheries_catch_sau.csv"):
+        tonnes = num(r.get("catch_tonnes"))
+        year = num(r.get("year"))
+        eez_id = clean_str(r.get("region_id"))
+        entity = clean_str(r.get("entity_id"))
+        common = clean_str(r.get("common_name"))
+        if tonnes is None or year is None or not eez_id:
+            continue
+        if not entity:
+            # Unattributed series ("Others"). Key off its label so the row is
+            # still stable across re-pulls.
+            if not common:
+                continue
+            entity = "other-" + common.lower().replace(" ", "-")
+        sci = clean_str(r.get("scientific_name"))
+        rows.append((
+            species.get(sci) if sci and len(sci.split()) >= 2 else None,
+            regions.get(clean_str(r.get("region_name"))),
+            datetime(int(year), 1, 1).date(),   # annual grain -> Jan 1 of the year
+            tonnes * 1000,
+            None,                               # gear_type — see docstring
+            "SAU",
+            f"{eez_id}:{entity}:{int(year)}",
+        ))
+    insert(cur,
+           "insert into fisheries_catch (species_id, region_id, catch_date, "
+           "catch_weight_kg, gear_type, source, external_id) values %s "
+           "on conflict (source, external_id) do nothing",
+           rows, "fisheries_catch [SAU]")
 
 
 def load_molecular(cur, species):
@@ -357,6 +430,9 @@ def record_metadata(cur):
         ("OBIS", "biodiversity", "CC-BY 4.0"),
         ("GBIF", "biodiversity", "varies by dataset"),
         ("FAO-via-OWID", "fisheries", "CC-BY 4.0"),
+        # The project's only non-permissive source: non-commercial + share-alike.
+        # Cite per https://seaaroundus.org/citation-policy/
+        ("SAU", "fisheries", "CC-BY-NC-SA 4.0"),
         ("BOLD", "genomics", "BOLD terms of use"),
     ]
     execute_values(cur,
@@ -390,8 +466,9 @@ def main():
                 cur.execute(
                     "truncate species_occurrences, molecular_records, "
                     "oceanographic_readings, sensor_readings, weather_observations, "
-                    "fisheries_national_totals, species, oceanographic_stations, "
-                    "regions, datasets_metadata restart identity cascade")
+                    "fisheries_national_totals, fisheries_catch, species, "
+                    "oceanographic_stations, regions, datasets_metadata "
+                    "restart identity cascade")
                 print("Truncated existing data.\n")
 
             print("Loading reference data ...")
@@ -405,6 +482,7 @@ def main():
             load_weather(cur, regions, stations)
             load_occurrences(cur, species)
             load_fisheries(cur)
+            load_fisheries_catch(cur, regions, species)
             load_molecular(cur, species)
 
             print("\nPost-processing ...")

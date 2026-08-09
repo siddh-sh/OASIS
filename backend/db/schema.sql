@@ -188,9 +188,7 @@ create unique index uq_species_occ_source_external on species_occurrences (sourc
 -- Reconciliation: the real FAO data (via OWID) is NATIONAL-AGGREGATE ONLY —
 -- India, per year, one number. It does not have species or region breakdown,
 -- so it cannot honestly populate fisheries_catch(species_id, region_id, ...)
--- as originally drafted. Given its own table instead; fisheries_catch below
--- stays as designed for the granular CMFRI data that will be added manually
--- later (CMFRI has no public API — see docs/developer-c-week1-flow.md).
+-- as originally drafted. Given its own table instead.
 create table fisheries_national_totals (
     id                  bigserial primary key,
     country             text not null default 'India',
@@ -200,6 +198,26 @@ create table fisheries_national_totals (
     unique (country, year, source)
 );
 
+-- Reconciliation: populated from Sea Around Us (source 'SAU'), whose catch
+-- reconstruction IS broken down by taxon and year within each EEZ — 14,214
+-- taxon-year rows for the two Indian EEZs. Kept separate from
+-- fisheries_national_totals above because the two measure different things:
+-- FAO reports official landings, SAU reconstructs total extraction including
+-- estimated discards and unreported/illegal catch. Summing them would double
+-- count.
+--
+-- species_id is NULL for the ~118 higher-rank taxa SAU reports (families and
+-- orders like Penaeidae, Decapoda) — those are genuinely not species and are
+-- not forced into the species table.
+--
+-- gear_type stays NULL: SAU exposes gear as a parallel aggregation of the
+-- same total rather than a species x gear crosstab (the API silently ignores
+-- a gear filter on the taxon endpoint), so populating it would double catch
+-- totals. See data-pipeline/collectors/sea_around_us.py.
+--
+-- external_id (added in migration 0002) is "<eez_id>:<sau_entity_id>:<year>",
+-- giving the unique natural key that makes reload idempotent — the same
+-- (source, external_id) pattern species_occurrences uses.
 create table fisheries_catch (
     id                  bigserial primary key,
     species_id          integer references species(species_id),
@@ -207,9 +225,11 @@ create table fisheries_catch (
     catch_date          date not null,
     catch_weight_kg     numeric not null,
     gear_type           text,
-    source              text not null       -- expected 'CMFRI' once populated
+    source              text not null,      -- 'SAU'
+    external_id         text                -- for idempotent reload
 );
 create index idx_fisheries_region_date on fisheries_catch (region_id, catch_date);
+create unique index uq_fisheries_catch_source_external on fisheries_catch (source, external_id);
 
 -- ============================================================
 -- Molecular / eDNA

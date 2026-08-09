@@ -116,17 +116,18 @@ load, not estimates:
 | Table | Rows |
 |---|---|
 | `oceanographic_readings` | 56,424 (41,678 SST + 14,746 chlorophyll) |
+| `fisheries_catch` | 14,214 (Sea Around Us, both Indian EEZs) |
 | `weather_observations` | 13,068 |
 | `species_occurrences` | 9,994 (6,000 OBIS + 3,994 GBIF) |
 | `sensor_readings` | 5,066 |
 | `molecular_records` | 1,993 |
-| `species` | 1,431 (deduplicated across four sources) |
+| `species` | 1,482 (deduplicated across five sources) |
 | `oceanographic_stations` | 666 |
 | `fisheries_national_totals` | 65 |
-| `regions` | 10 |
-| `datasets_metadata` | 8 |
+| `regions` | 12 |
+| `datasets_metadata` | 9 |
 
-Two counts routinely surprise people:
+Three counts routinely surprise people:
 
 - **`oceanographic_readings` is well below the 84,714 rows in the seed
   CSVs.** The loader skips satellite grid cells whose value is null — those
@@ -135,18 +136,25 @@ Two counts routinely surprise people:
 - **`oceanographic_stations` is 666, not the 31 named stations.** Each
   satellite grid cell that carries at least one reading is registered as a
   `satellite-grid` station alongside the 18 coastal anchors and 13 buoys.
+- **`fisheries_catch` has 14,214 rows but only 6,108 carry a `species_id`.**
+  The rest are SAU's family/order-level aggregates and its unattributed
+  "Others" bucket — real catch that genuinely has no species to point at.
+  See `docs/database-schema.md`.
 
-`fisheries_catch`, `profiles`, `embeddings`, `ml_predictions`,
-`anomaly_events`, `recommendations`, `agent_conversations` and
-`agent_messages` are all expected to be **0** at this stage — they are
-populated by Phases 4–5, or (for `fisheries_catch`) by CMFRI data that has
-to be transcribed by hand.
+`profiles`, `embeddings`, `ml_predictions`, `anomaly_events`,
+`recommendations`, `agent_conversations` and `agent_messages` are all
+expected to be **0** at this stage — they are populated by Phases 4–5
+(`profiles` fills in as users sign up).
 
-Finally, tell Alembic the schema is already present, so future changes go
-through migrations rather than `apply_schema.py`:
+Finally, bring Alembic up to date. On a database created by
+`apply_schema.py`, stamp the baseline as already-applied, then apply the
+migrations that came after it:
 
 ```bash
-cd backend && alembic stamp 0001
+cd backend
+alembic stamp 0001     # baseline == what apply_schema.py already created
+alembic upgrade head   # applies 0002 onward
+alembic current        # should print: 0002 (head)
 ```
 
 ---
