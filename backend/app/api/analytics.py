@@ -4,8 +4,9 @@ Backed by app/ml/, which is plain scikit-learn with no LLM involvement.
 Phase 5's agents call these same functions as tools and narrate the result;
 the numbers are produced here so they stay reproducible.
 
-`/recommendation/{id}` and `/correlation` remain 501 — they belong to
-Phase 5 and Phase 6 respectively.
+`/recommendation/{id}` (Phase 5) narrates these via the LLM; `/correlation`
+(Phase 6) joins domains on a shared monthly grain. Nothing here is 501 any
+more.
 """
 from datetime import date, datetime
 
@@ -21,6 +22,7 @@ from app.db.session import get_db
 from app.ml import registry
 from app.ml.anomalies import detect_catch_decline
 from app.ml.catch import CATCH_FEATURES, predict_next_year
+from app.ml.correlation import available_variables, correlate
 from app.ml.explain import attribute, load_explanation, store_prediction
 from app.ml.features import STEP_DAYS
 from app.ml.forecast import forecast_station
@@ -256,6 +258,27 @@ def recommendation(
     return payload
 
 
+@router.get("/correlation/variables")
+def correlation_variables():
+    """The fixed set of correlatable variables. A registry, not free-form
+    column names — the same no-user-supplied-SQL rule the agent tools follow."""
+    return available_variables()
+
+
 @router.get("/correlation")
-def correlation(var1: str, var2: str, region: str | None = None):
-    raise HTTPException(501, "correlation studio not implemented yet (Phase 6)")
+def correlation(
+    var1: str = Query(description="see /correlation/variables"),
+    var2: str = Query(description="see /correlation/variables"),
+    region: str | None = Query(default=None, description="weather variables only"),
+    db: Session = Depends(get_db),
+):
+    """Cross-domain correlation over a common monthly grain.
+
+    Returns Pearson and Spearman with a p-value and the scatter points, plus
+    `notes` spelling out the limits — ~25 overlapping months, and coefficients
+    computed on spatial means rather than per-location.
+    """
+    try:
+        return correlate(db, var1, var2, region)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc

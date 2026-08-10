@@ -55,12 +55,11 @@ def test_phase4_analytics_endpoints_are_no_longer_stubs(client):
     assert resp.status_code == 422
 
 
-def test_phase6_endpoints_still_stub_501(client):
-    # Correlation studio and session export are Should-Haves, Phase 6.
-    assert client.get(
-        "/api/analytics/correlation", params={"var1": "sst", "var2": "chlorophyll_a"}
-    ).status_code == 501
+def test_remaining_stub_is_session_export_only(client):
+    # Everything else has landed; downloadable session report is the last
+    # Should-Have still unbuilt.
     assert client.post("/api/agent/report", params={"conversation_id": 1}).status_code == 501
+    assert client.post("/api/admin/sync/noaa").status_code in (401, 501)
 
 
 def test_phase5_agent_endpoints_are_no_longer_stubs(client):

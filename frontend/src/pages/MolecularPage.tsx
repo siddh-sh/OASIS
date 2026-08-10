@@ -1,9 +1,29 @@
+import { useState } from 'react'
 import { DataSourceBadge } from '@/components/DataSourceBadge'
 import { LoadingRows } from '@/components/LoadingSkeleton'
+import { molecularApi, type SequenceMatchResult } from '@/api/molecular'
 import { useMolecularRecords } from '@/hooks/useMolecularData'
 
 export function MolecularPage() {
   const records = useMolecularRecords({ limit: 50 })
+  const [sequence, setSequence] = useState('')
+  const [result, setResult] = useState<SequenceMatchResult>()
+  const [error, setError] = useState<string>()
+  const [searching, setSearching] = useState(false)
+
+  async function runSearch() {
+    if (!sequence.trim() || searching) return
+    setSearching(true)
+    setError(undefined)
+    try {
+      setResult(await molecularApi.match(sequence))
+    } catch (e) {
+      setError((e as Error).message)
+      setResult(undefined)
+    } finally {
+      setSearching(false)
+    }
+  }
 
   return (
     <div className="flex flex-col gap-6">
@@ -12,9 +32,63 @@ export function MolecularPage() {
         <p className="text-sm text-ocean-500">BOLD Systems DNA barcode records — text sequences, not imagery.</p>
       </div>
 
-      <div className="rounded-lg border border-dashed border-ocean-300 p-4 text-sm text-ocean-500 dark:border-ocean-700">
-        Barcode similarity search (Should-Have, POST /api/molecular/match) isn't implemented yet — planned as a
-        k-mer-frequency cosine similarity ranking, not full BLAST alignment (see flow.md §1).
+      <div className="flex flex-col gap-2 rounded-lg border border-ocean-200 p-4 dark:border-ocean-800">
+        <h2 className="text-sm font-semibold text-ocean-950 dark:text-ocean-50">Barcode similarity search</h2>
+        <textarea
+          value={sequence}
+          onChange={(e) => setSequence(e.target.value)}
+          rows={4}
+          placeholder="Paste a nucleotide sequence (FASTA headers, gaps and ambiguity codes are stripped automatically)…"
+          className="w-full rounded-md border border-ocean-300 px-3 py-2 font-mono text-xs dark:border-ocean-700 dark:bg-ocean-900"
+        />
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => void runSearch()}
+            disabled={searching || !sequence.trim()}
+            className="rounded-md bg-ocean-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+          >
+            {searching ? 'Searching…' : 'Search'}
+          </button>
+          {error && <span className="text-xs text-red-600">{error}</span>}
+        </div>
+
+        {result && (
+          <div className="mt-2 flex flex-col gap-2">
+            <p className="text-xs text-ocean-500">
+              Compared against {result.n_compared.toLocaleString()} records · {result.method} · query{' '}
+              {result.query_length} bases
+            </p>
+            {/* Rendered, never hidden: this ranks by composition, so it is not
+                an alignment-grade identification. */}
+            <p className="rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:bg-amber-950 dark:text-amber-200">
+              {result.caveat}
+            </p>
+            <div className="overflow-x-auto rounded-md border border-ocean-200 dark:border-ocean-800">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-ocean-50 text-ocean-600 dark:bg-ocean-900 dark:text-ocean-300">
+                  <tr>
+                    <th className="px-3 py-2">Similarity</th>
+                    <th className="px-3 py-2">Process ID</th>
+                    <th className="px-3 py-2">Species</th>
+                    <th className="px-3 py-2">Marker</th>
+                    <th className="px-3 py-2">Length</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {result.matches.map((m) => (
+                    <tr key={m.record_id} className="border-t border-ocean-100 dark:border-ocean-800">
+                      <td className="px-3 py-2 font-mono">{m.similarity.toFixed(4)}</td>
+                      <td className="px-3 py-2 font-mono">{m.process_id ?? '—'}</td>
+                      <td className="px-3 py-2 italic">{m.scientific_name ?? '—'}</td>
+                      <td className="px-3 py-2">{m.marker_gene ?? '—'}</td>
+                      <td className="px-3 py-2">{m.subject_length}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
       </div>
 
       {records.isLoading ? (

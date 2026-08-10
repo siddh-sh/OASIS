@@ -24,7 +24,37 @@ export interface Recommendation {
   created_at: string
 }
 
+export interface CorrelationVariable {
+  name: string
+  domain: string
+  unit: string
+  label: string
+}
+
+export interface CorrelationResult {
+  var1: string
+  var2: string
+  var1_label?: string
+  var2_label?: string
+  var1_unit?: string
+  var2_unit?: string
+  n_months: number
+  pearson_r: number | null
+  spearman_rho?: number
+  p_value: number | null
+  significant: boolean
+  points: { month: string; x: number; y: number }[]
+  // Sample-size and spatial-mean caveats from the backend. Rendered, not
+  // dropped — a coefficient over ~25 months needs its context.
+  notes: string[]
+}
+
 export const analyticsApi = {
   anomalies: (params: { region?: string; domain?: string } = {}) =>
     apiFetch<AnomalyEvent[]>(`/api/analytics/anomalies${toQuery(params)}`),
+
+  correlationVariables: () => apiFetch<CorrelationVariable[]>('/api/analytics/correlation/variables'),
+
+  correlation: (params: { var1: string; var2: string; region?: string }) =>
+    apiFetch<CorrelationResult>(`/api/analytics/correlation${toQuery(params)}`),
 }
