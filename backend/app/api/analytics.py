@@ -14,6 +14,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.agents.explainable_recommendation_agent import recommend
+from app.agents.llm import LLMNotConfigured, llm_available
 from app.db.models import AnomalyEvent, Region, Species
 from app.db.session import get_db
 from app.ml import registry
@@ -225,8 +227,33 @@ def explain_prediction(prediction_id: int, db: Session = Depends(get_db)):
 
 
 @router.get("/recommendation/{prediction_or_anomaly_id}")
-def recommendation(prediction_or_anomaly_id: int):
-    raise HTTPException(501, "recommendation narration not implemented yet (Phase 5)")
+def recommendation(
+    prediction_or_anomaly_id: int,
+    refresh: bool = Query(default=False, description="regenerate instead of returning the stored narrative"),
+    db: Session = Depends(get_db),
+):
+    """Plain-language recommendation for a prediction or an anomaly.
+
+    The id is resolved against `ml_predictions` first, then `anomaly_events`
+    — `/predict/catch` hands back a `prediction_id`, so that is the id most
+    likely to arrive here. Narratives are cached in `recommendations`; pass
+    `refresh=true` to regenerate.
+    """
+    if not llm_available():
+        raise HTTPException(
+            503,
+            "No LLM configured. Set LLM_API_KEY in .env — any OpenAI-compatible "
+            "provider works (console.groq.com is free).",
+        )
+    try:
+        payload = recommend(db, prediction_or_anomaly_id, refresh=refresh)
+    except LLMNotConfigured as exc:
+        raise HTTPException(503, str(exc)) from exc
+    if payload is None:
+        raise HTTPException(
+            404, f"no ml_prediction or anomaly_event with id={prediction_or_anomaly_id}"
+        )
+    return payload
 
 
 @router.get("/correlation")

@@ -55,18 +55,19 @@ def test_phase4_analytics_endpoints_are_no_longer_stubs(client):
     assert resp.status_code == 422
 
 
-def test_phase5_and_phase6_endpoints_still_stub_501(client):
-    # These are deliberately unbuilt: recommendation narration is Phase 5,
-    # correlation studio is Phase 6.
-    assert client.get("/api/analytics/recommendation/1").status_code == 501
+def test_phase6_endpoints_still_stub_501(client):
+    # Correlation studio and session export are Should-Haves, Phase 6.
     assert client.get(
         "/api/analytics/correlation", params={"var1": "sst", "var2": "chlorophyll_a"}
     ).status_code == 501
+    assert client.post("/api/agent/report", params={"conversation_id": 1}).status_code == 501
 
 
-def test_agent_chat_stub_501(client):
-    resp = client.post("/api/agent/chat", json={"message": "hello"})
-    assert resp.status_code == 501
+def test_phase5_agent_endpoints_are_no_longer_stubs(client):
+    # /chat needs a body, so a malformed request is a 422 and a valid one is
+    # 200 (or 503 with no LLM key configured) — but never 501 again.
+    assert client.post("/api/agent/chat", json={}).status_code == 422
+    assert client.get("/api/analytics/recommendation/999999999").status_code in (404, 503)
 
 
 def test_admin_status_requires_auth(client):

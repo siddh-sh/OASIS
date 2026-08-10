@@ -307,13 +307,20 @@ create table recommendations (
     created_at          timestamptz not null default now()
 );
 
+-- Reconciliation: 384 dimensions, not the 1536 originally drafted for
+-- OpenAI's ada-002. This project runs on free tiers and its LLM provider
+-- (Groq) has no embeddings endpoint, so vectors are generated locally with
+-- fastembed / BAAI/bge-small-en-v1.5 (ONNX, no torch, no API key), which
+-- emits 384 dims. Padding to 1536 would waste storage and overstate the
+-- precision of the data. Changed in migration 0004.
 create table embeddings (
     id                  bigserial primary key,
     source_table        text not null,
     source_id           text not null,
     content             text not null,
-    embedding           vector(1536)
+    embedding           vector(384)
 );
+create unique index uq_embeddings_source on embeddings (source_table, source_id);
 -- NOTE: the ivfflat index is deliberately NOT created here. ivfflat builds
 -- its clusters from the rows present at creation time, so building it on an
 -- empty table gives poor recall. Create it in Week 3, AFTER the embeddings

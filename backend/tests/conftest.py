@@ -26,3 +26,20 @@ requires_supabase_auth = pytest.mark.skipif(
 @pytest.fixture
 def client():
     return TestClient(app)
+
+
+@pytest.fixture
+def db_session():
+    """A real session for tests that exercise service/agent code directly
+    rather than going through HTTP. Guarded by `requires_db` at the test
+    level; this raises loudly if a test forgets that marker."""
+    from app.db.session import SessionLocal
+
+    if SessionLocal is None:
+        pytest.skip("DATABASE_URL not configured")
+    session = SessionLocal()
+    try:
+        yield session
+    finally:
+        session.rollback()
+        session.close()

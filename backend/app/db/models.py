@@ -255,7 +255,7 @@ class Embedding(Base):
     content: Mapped[str] = mapped_column(Text, nullable=False)
     # Dimension must match whatever embedding model Phase 5 picks — see the
     # warning comment above the ivfflat index in schema.sql.
-    embedding = mapped_column(Vector(1536), nullable=True)
+    embedding = mapped_column(Vector(384), nullable=True)
 
 
 class DatasetsMetadata(Base):

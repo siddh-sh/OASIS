@@ -18,7 +18,14 @@ export function ChatWindow() {
     try {
       const res = await agentApi.chat(text, conversationId)
       setConversationId(res.conversation_id)
-      setMessages((prev) => [...prev, res.message])
+      // Guard the shape rather than trusting it: pushing an undefined message
+      // renders a MessageBubble with no `role`, which throws during render and
+      // blanks the entire page — a far worse failure than a visible error.
+      const reply: ChatMessage =
+        res.message && typeof res.message.content === 'string'
+          ? res.message
+          : { role: 'assistant', content: 'The server returned an unexpected response shape.' }
+      setMessages((prev) => [...prev, reply])
     } catch (e) {
       const fallback =
         e instanceof ApiError && e.status === 501
