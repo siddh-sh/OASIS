@@ -35,7 +35,8 @@ actually be demoed today.
 7. **Molecular / eDNA** — real BOLD barcode record table.
 8. **Correlation Studio / Risk & Anomaly Alerts / Chatbot / Admin** — pages
    render and call the real (stubbed) endpoints; each shows an explicit
-   "not implemented yet — Phase N" message rather than fabricated data.
+   "not implemented yet" message rather than fabricated data. As of Phase 6
+   the only such surface left is session-report export.
 
 ## Full target walkthrough (once Phases 4–5 land)
 

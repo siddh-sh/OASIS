@@ -50,21 +50,22 @@ Thin proxies to Supabase Auth's REST API — no password handling in this app.
 
 | Method | Path | Params |
 |---|---|---|
-| GET | `/api/fisheries/catch` | `region`, `species_id`, `start_date`, `end_date`, `limit`, `offset` — **currently always empty**; `fisheries_catch` is granular CMFRI data not yet transcribed (CMFRI has no public API) |
-| GET | `/api/fisheries/summary` | `region`, `start_year`, `end_year` — returns both `national_totals` (real, populated, annual FAO-via-OWID data) and `granular_catch` (empty) honestly rather than faking a shared grain |
+| GET | `/api/fisheries/catch` | `region`, `species_id`, `start_date`, `end_date`, `limit`, `offset` — 14,214 Sea Around Us taxon-year rows, 1950–2019, across both Indian EEZs |
+| GET | `/api/fisheries/summary` | `region`, `start_year`, `end_year` — returns `national_totals` (FAO reported landings) and a `granular_catch` sample (Sea Around Us reconstruction) as separate grains. They measure different things and **must not be summed**; the response says so. |
 
 ## Molecular / eDNA (`/api/molecular`)
 
 | Method | Path | Params |
 |---|---|---|
 | GET | `/api/molecular/records` | `species_id`, `limit`, `offset` — BOLD DNA barcode records |
+| POST | `/api/molecular/match` | `{sequence, limit?, marker_gene?}` → barcodes ranked by 5-mer cosine similarity. FASTA headers, gaps and ambiguity codes are stripped. Composition-based, **not alignment** — the response carries that caveat. 422 if under 20 valid bases. |
 
 ## Admin (`/api/admin`) — requires `role = 'admin'`
 
 | Method | Path | Notes |
 |---|---|---|
 | GET | `/api/admin/datasets/status` | Reads `datasets_metadata`: source, last sync, record count, license, cleaning notes |
-| POST | `/api/admin/sync/{source}` | 501 — wires a live collector re-run in Phase 7 |
+| POST | `/api/admin/sync/{source}` | 501 — triggering a live collector re-run from the API is out of scope; the GitHub Actions refresh workflows do this on a schedule |
 
 ## Analytics — live (Phase 4)
 
@@ -79,21 +80,17 @@ three models barely beat it — see [`model-cards.md`](model-cards.md).
 | GET | `/api/analytics/forecast/ocean-conditions?station_id&variable&horizon` | `variable` is `sst` or `chlorophyll_a`; `horizon` is 1–10 8-day composites. 404 if the station has no history for that variable (chlorophyll covers 177 of 458 stations). |
 | GET | `/api/analytics/predict/catch?species_id&region_id` | Next-year tonnage with SHAP attribution. Persists to `ml_predictions` and returns `prediction_id`. Needs ≥6 consecutive annual observations, else 404. |
 | GET | `/api/analytics/explain/{prediction_id}` | SHAP contributions for a stored prediction. Additive in the model's target space (log-tonnes for catch) — sum before exponentiating, never term by term. |
+| GET | `/api/analytics/recommendation/{id}` | Plain-language narration of a prediction or anomaly, generated from its stored attribution. Resolves the id against `ml_predictions` first, then `anomaly_events`. Cached in `recommendations`; `?refresh=true` regenerates. 503 if no LLM key. |
+| GET | `/api/analytics/correlation/variables` | The fixed registry of correlatable variables. |
+| GET | `/api/analytics/correlation?var1&var2&region` | Pearson + Spearman with p-value and scatter points over a shared monthly grain. Ships `notes` with the sample-size and spatial-mean caveats. |
 
-### Still stubbed
+## Agent — live (Phase 5)
 
-| Method | Path | Lands in |
+| Method | Path | Notes |
 |---|---|---|
-| GET | `/api/analytics/recommendation/{prediction_or_anomaly_id}` | Phase 5 |
-| GET | `/api/analytics/correlation?var1&var2&region` | Phase 6 (Should-Have) |
-
-## Agent — all 501 stubs (Phase 5/6)
-
-| Method | Path | Lands in |
-|---|---|---|
-| POST | `/api/agent/chat` | Phase 5 |
-| GET | `/api/agent/conversations/{conversation_id}` | Phase 5 |
-| POST | `/api/agent/report` | Phase 6 (Should-Have) |
+| POST | `/api/agent/chat` | `{message, conversation_id?}` → `{conversation_id, message: {role, content, sources}}`. `sources` lists the tools that actually ran. Omitting `conversation_id` starts a new thread. 503 without an LLM key. |
+| GET | `/api/agent/conversations/{id}` | Full stored transcript with per-message tool provenance. |
+| POST | `/api/agent/report` | **501** — session export is the last unbuilt Should-Have. |
 
 ## Meta
 

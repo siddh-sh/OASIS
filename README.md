@@ -22,8 +22,8 @@ flowchart LR
     Pipeline --> DB[(Postgres + PostGIS + pgvector\nSupabase)]
     DB --> API[FastAPI backend]
     API --> UI[React frontend]
-    Agents["LangGraph agent pipeline\n(Phase 5, not yet built)"] -.-> DB
-    API -.-> Agents
+    Agents["LangGraph agent pipeline\n(tool-constrained, Groq)"] --> DB
+    API --> Agents
 ```
 
 See [`docs/architecture.md`](docs/architecture.md) for the full agent
@@ -39,11 +39,11 @@ for the schema.
 | 2 | Auth: Supabase Auth proxy + JWT verification | Done |
 | 3 | React frontend: layout, auth, 6 domain explorer pages | Done |
 | 4 | Feature engineering, prediction/forecasting models, anomaly detection, SHAP | Done — `backend/app/ml/`, four endpoints live, 1,375 anomalies detected. Skill vs persistence is reported honestly per model (see [`docs/model-cards.md`](docs/model-cards.md)): chlorophyll +17.5%, catch +1.5%, SST −0.0% |
-| 5 | LangGraph agent pipeline, NL chatbot, pgvector RAG | Not started — LLM provider configured (Groq free tier, verified) and Phase 4 tools ready to wrap |
-| 6 | Correlation Studio, eDNA similarity search, SHAP viz, session export | Not started (Should-Have, depends on 4/5) |
-| 7 | Deployment/CI | `docker-compose.yml` + `backend-ci.yml`/`frontend-ci.yml` in place; not yet deployed to Render/Vercel/Supabase |
-| 8 | Testing hardening | Backend: DB/Supabase-gated pytest suite (skips without credentials, doesn't fake). Frontend: manual Playwright smoke-check only, no component test suite yet |
-| 9 | Documentation | This file + `docs/architecture.md`, `docs/api-reference.md`, `docs/database-schema.md`, `docs/demo-script.md` |
+| 5 | LangGraph agent pipeline, NL chatbot, pgvector RAG | Done — tool-constrained ReAct loop over the Phase 4 functions, 1,482 species embedded locally with fastembed, recommendations narrated and cached. Runs on any OpenAI-compatible provider (Groq free tier by default) |
+| 6 | Correlation Studio, eDNA similarity search, SHAP viz, session export | Correlation Studio and eDNA k-mer search done; SHAP contributions are returned by the API and narrated in recommendations but not yet charted; session export still 501 |
+| 7 | Deployment/CI | `render.yaml` + `frontend/vercel.json` committed and CI deploy steps wired; **needs you to create the Render service and Vercel project** — see [`docs/deployment.md`](docs/deployment.md) |
+| 8 | Testing hardening | Backend: 58 pytest tests against the live database (DB/Supabase-gated, skip rather than fake). Frontend: 13 Vitest + React Testing Library tests, running in CI |
+| 9 | Documentation | This file + `architecture.md`, `api-reference.md`, `database-schema.md`, `model-cards.md`, `deployment.md`, `demo-script.md` |
 
 **On Phase 4's numbers:** the models are reported against a persistence
 baseline, and two of the three barely beat it — chlorophyll forecasting is
@@ -54,11 +54,13 @@ than hidden. The component that works unambiguously well is the anomaly
 detector, which found a spatially coherent basin-wide warm event across
 April–May 2026. Details in [`docs/model-cards.md`](docs/model-cards.md).
 
-**Why Phases 5–6 are unstarted:** Phase 5 needs the Phase 4 tools it wraps
-(now in place) plus an LLM key. The pipeline is deliberately
-provider-agnostic — set `LLM_API_KEY` / `LLM_BASE_URL` / `LLM_MODEL` in
-`.env` for any OpenAI-compatible free tier (Groq by default; Cerebras and
-OpenRouter also work with a base-URL change).
+**What's left:** creating the Render service and Vercel project, which
+needs your accounts — `docs/deployment.md` has the six steps. Session-report
+export and SHAP charts in the UI are the two remaining Should-Haves.
+
+**The agent layer is provider-agnostic:** set `LLM_API_KEY` / `LLM_BASE_URL`
+/ `LLM_MODEL` in `.env` for any OpenAI-compatible free tier. Groq by default;
+Cerebras and OpenRouter work with a base-URL change and no code change.
 
 ## Setup
 
@@ -90,6 +92,7 @@ cd frontend
 cp .env.example .env   # VITE_API_BASE_URL, optionally VITE_SUPABASE_*
 npm install
 npm run dev             # http://localhost:5173
+npm test                # Vitest + React Testing Library
 ```
 
 ### 4. Everything at once (local Postgres instead of Supabase)
@@ -125,6 +128,7 @@ than mock — when no database is configured.
 - [`docs/api-reference.md`](docs/api-reference.md) — every live endpoint
 - [`docs/database-schema.md`](docs/database-schema.md) — human-readable schema + reconciliation notes
 - [`docs/model-cards.md`](docs/model-cards.md) — Phase 4 models, metrics, and where they fall short
+- [`docs/deployment.md`](docs/deployment.md) — Render + Vercel, and the free-tier limits that bite
 - [`docs/demo-script.md`](docs/demo-script.md) — walkthrough for a live evaluation
 - [`docs/supabase-setup.md`](docs/supabase-setup.md) — provisioning Supabase
 - [`docs/developer-c-week1-flow.md`](docs/developer-c-week1-flow.md) — data collection/schema decisions and why

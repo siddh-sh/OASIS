@@ -1,0 +1,48 @@
+# Render blueprint for the OASIS backend (flow.md Phase 7).
+#
+# Create the service by pointing Render at this repo — "New +" > "Blueprint" —
+# rather than hand-configuring a web service. Everything except the secrets is
+# captured here, so the deploy is reproducible instead of a set of dashboard
+# clicks nobody wrote down.
+#
+# The four `sync: false` values must be pasted into the Render dashboard once;
+# they are deliberately not in this file, which is public.
+services:
+  - type: web
+    name: oasis-api
+    runtime: python
+    plan: free
+    region: singapore # closest Render free region to the Supabase project (ap-northeast-2)
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    # Single worker on purpose: the free plan has 512 MB, and this process
+    # loads scikit-learn, SHAP and a 130 MB ONNX embedding model. A second
+    # worker doubles that and gets OOM-killed.
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT --workers 1
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12"
+      - key: ENVIRONMENT
+        value: production
+      # Supabase session pooler string. NOT the direct connection — that is
+      # IPv6-only and unreachable from Render.
+      - key: DATABASE_URL
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      # Any OpenAI-compatible provider; Groq's free tier by default.
+      - key: LLM_API_KEY
+        sync: false
+      - key: LLM_BASE_URL
+        value: https://api.groq.com/openai/v1
+      - key: LLM_MODEL
+        value: llama-3.3-70b-versatile
+      # Set to the Vercel URL once the frontend is deployed, or CORS will
+      # reject every browser request.
+      - key: CORS_ORIGINS
+        sync: false
