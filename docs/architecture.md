@@ -12,7 +12,7 @@ flowchart TB
         UI[Dashboard / Domain Explorer Pages]
         Chat[NL Chatbot UI - shell only]
         Maps[GIS Map & Chart Components]
-        Alerts[Risk & Anomaly Alerts Panel - shell only]
+        Alerts[Risk & Anomaly Alerts Panel - live, Phase 4]
     end
 
     subgraph API["Backend — FastAPI (built, Phases 1-2)"]
@@ -29,7 +29,7 @@ flowchart TB
         A6[NL Chatbot Coordinator]
     end
 
-    subgraph Data["Data Layer — Supabase (schema + loader built, Phase 0; not yet provisioned)"]
+    subgraph Data["Data Layer — Supabase (live, ~103K rows loaded)"]
         PG[(Unified Marine Data Repository - Postgres + PostGIS)]
         VEC[(pgvector store - empty, no embeddings loaded yet)]
         AUTHDB[(Auth / Users)]
@@ -44,7 +44,7 @@ flowchart TB
         S6[Molecular/eDNA - BOLD]
     end
 
-    LLM[Claude API - not yet wired]
+    LLM[OpenAI-compatible LLM API - Groq by default, not yet wired]
 
     S1 & S2 & S3 & S4 & S5 & S6 --> Pipeline
     Pipeline -.-> PG
@@ -72,11 +72,11 @@ those hops are unimplemented rather than broken.
 |---|---|
 | **Data sources → `data-pipeline/collectors/`** | Live. 8 collectors, ~129K real records committed to `data-pipeline/seeds/raw/`. Six are refreshed daily/weekly via GitHub Actions; `sea_around_us.py` is a versioned historical reconstruction (1950–2019) and is pulled by hand, since polling it could never return anything new. |
 | **`data-pipeline/cleaning/load_seeds.py`** | Live, deterministic. This *is* the cleaning logic Phase 5's `integration_cleaning_agent.py` will later wrap with an LLM narration layer — it isn't a placeholder, it's the reference implementation. |
-| **Supabase (Postgres+PostGIS+pgvector+Auth)** | Schema (`backend/db/schema.sql`) and apply tooling exist; no project has been provisioned in this environment, so the schema has never been applied to a live database and no rows exist yet. |
-| **`backend/app/` (FastAPI)** | Live. Every read endpoint in `flow.md` §11 (excluding analytics/agent) is implemented against SQLAlchemy models that mirror `schema.sql` 1:1. Auth proxies to Supabase Auth's REST API. `analytics/*` and `agent/*` are 501 stubs. |
-| **`frontend/` (React)** | Live. Auth-gated shell, dashboard, and explorer pages for all six domains consume the real read API. Correlation/Risk-Alerts/Chatbot/Admin pages render but their backing endpoints are still 501s, so they show an explicit "not implemented yet" state rather than fake data. |
+| **Supabase (Postgres+PostGIS+pgvector+Auth)** | Live. Schema applied (19 tables incl. `alembic_version`), ~103K rows loaded across all six domains, Alembic at revision `0003`. `embeddings` is still empty — that is Phase 5. |
+| **`backend/app/` (FastAPI)** | Live. Every read endpoint in `flow.md` §11 (excluding analytics/agent) is implemented against SQLAlchemy models that mirror `schema.sql` 1:1. Auth proxies to Supabase Auth's REST API. `analytics/*` is live as of Phase 4 apart from `/recommendation` (Phase 5) and `/correlation` (Phase 6); `agent/*` remains a 501 stub. |
+| **`frontend/` (React)** | Live. Auth-gated shell, dashboard, and explorer pages for all six domains consume the real read API. Risk & Anomaly Alerts now lists real detected events with station and value-vs-threshold. Correlation and Chatbot still show an explicit "not implemented yet" state rather than fake data, since their endpoints are Phase 6 / Phase 5. |
 | **`backend/app/agents/`** | Does not exist yet. Phase 5. |
-| **`backend/app/ml/`** | Does not exist yet. Phase 4. |
+| **`backend/app/ml/`** | Live. Feature engineering, ocean forecasting, catch prediction, anomaly detection and SHAP, behind four `/api/analytics/*` endpoints. Artifacts in `ml-models/artifacts/`, trained by `python -m app.ml.registry`. Metrics — including where models fail to beat a persistence baseline — in `docs/model-cards.md`. |
 
 ## Two execution modes (planned, Phase 5)
 
@@ -95,7 +95,7 @@ flowchart LR
     User((Researcher / Policymaker / Evaluator)) -->|HTTPS| Vercel[Vercel: React App]
     Vercel -->|REST/JSON| Render[Render: FastAPI Backend + Agent Pipeline]
     Render -->|SQL / pgvector| Supabase[(Supabase: Postgres + PostGIS + pgvector + Auth)]
-    Render -->|API calls| Claude[Anthropic Claude API]
+    Render -->|API calls| LLMAPI[OpenAI-compatible LLM API - Groq]
     subgraph CI["GitHub Actions"]
         Lint[Lint + Test]
     end

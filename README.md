@@ -38,18 +38,27 @@ for the schema.
 | 1 | FastAPI backend core: SQLAlchemy models, read API (6 domains), Alembic baseline | Done |
 | 2 | Auth: Supabase Auth proxy + JWT verification | Done |
 | 3 | React frontend: layout, auth, 6 domain explorer pages | Done |
-| 4 | Feature engineering, prediction/forecasting models, anomaly detection | Not started — needs a populated DB to train/evaluate against |
-| 5 | LangGraph agent pipeline, NL chatbot, pgvector RAG | Not started — needs `ANTHROPIC_API_KEY` + populated DB |
+| 4 | Feature engineering, prediction/forecasting models, anomaly detection, SHAP | Done — `backend/app/ml/`, four endpoints live, 1,375 anomalies detected. Skill vs persistence is reported honestly per model (see [`docs/model-cards.md`](docs/model-cards.md)): chlorophyll +17.5%, catch +1.5%, SST −0.0% |
+| 5 | LangGraph agent pipeline, NL chatbot, pgvector RAG | Not started — LLM provider configured (Groq free tier, verified) and Phase 4 tools ready to wrap |
 | 6 | Correlation Studio, eDNA similarity search, SHAP viz, session export | Not started (Should-Have, depends on 4/5) |
 | 7 | Deployment/CI | `docker-compose.yml` + `backend-ci.yml`/`frontend-ci.yml` in place; not yet deployed to Render/Vercel/Supabase |
 | 8 | Testing hardening | Backend: DB/Supabase-gated pytest suite (skips without credentials, doesn't fake). Frontend: manual Playwright smoke-check only, no component test suite yet |
 | 9 | Documentation | This file + `docs/architecture.md`, `docs/api-reference.md`, `docs/database-schema.md`, `docs/demo-script.md` |
 
-**Why Phases 4–6 are unstarted:** they require a live, seeded Postgres
-database (Phase 4/5) and an Anthropic API key (Phase 5) to produce anything
-that's actually verified rather than plausible-looking and untested — see
-"No synthetic data" below. Provision Supabase (below) and set
-`ANTHROPIC_API_KEY` to unblock them.
+**On Phase 4's numbers:** the models are reported against a persistence
+baseline, and two of the three barely beat it — chlorophyll forecasting is
+the only clear win, and SST forecasting is no better than assuming no
+change. That is a property of 8-day satellite composites with no
+atmospheric forcing in the dataset, not a bug, and it is documented rather
+than hidden. The component that works unambiguously well is the anomaly
+detector, which found a spatially coherent basin-wide warm event across
+April–May 2026. Details in [`docs/model-cards.md`](docs/model-cards.md).
+
+**Why Phases 5–6 are unstarted:** Phase 5 needs the Phase 4 tools it wraps
+(now in place) plus an LLM key. The pipeline is deliberately
+provider-agnostic — set `LLM_API_KEY` / `LLM_BASE_URL` / `LLM_MODEL` in
+`.env` for any OpenAI-compatible free tier (Groq by default; Cerebras and
+OpenRouter also work with a base-URL change).
 
 ## Setup
 
@@ -93,8 +102,10 @@ docker compose up --build
 ## Tech stack
 
 Python/FastAPI/SQLAlchemy/Alembic backend, React/TypeScript/Vite/Tailwind
-frontend, Postgres+PostGIS+pgvector on Supabase, scikit-learn/XGBoost/SHAP
-for ML, LangGraph + Claude API for the agent pipeline. Full rationale in
+frontend, Postgres+PostGIS+pgvector on Supabase, scikit-learn/SHAP for ML
+(gradient boosting via scikit-learn's HistGradientBoosting rather than the
+xgboost package — same model class, no extra binary wheel on a free-tier
+dyno), LangGraph + any OpenAI-compatible LLM for the agent pipeline. Full rationale in
 [`flow.md` §2](flow.md#2-recommended-tech-stack).
 
 ## No synthetic data
@@ -113,6 +124,7 @@ than mock — when no database is configured.
 - [`docs/architecture.md`](docs/architecture.md) — agent workflow, built vs. planned
 - [`docs/api-reference.md`](docs/api-reference.md) — every live endpoint
 - [`docs/database-schema.md`](docs/database-schema.md) — human-readable schema + reconciliation notes
+- [`docs/model-cards.md`](docs/model-cards.md) — Phase 4 models, metrics, and where they fall short
 - [`docs/demo-script.md`](docs/demo-script.md) — walkthrough for a live evaluation
 - [`docs/supabase-setup.md`](docs/supabase-setup.md) — provisioning Supabase
 - [`docs/developer-c-week1-flow.md`](docs/developer-c-week1-flow.md) — data collection/schema decisions and why

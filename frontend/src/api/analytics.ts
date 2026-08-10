@@ -6,6 +6,9 @@ export interface AnomalyEvent {
   id: number
   domain: string
   region_id: number | null
+  // Satellite grid cells sit outside every coastal region, so region_id is
+  // null for these events and station_id is the only location they carry.
+  station_id: number | null
   variable: string
   detected_at: string
   severity: string | null

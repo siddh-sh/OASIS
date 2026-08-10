@@ -38,8 +38,20 @@ export function RiskAlertsPage() {
         <ul className="flex flex-col gap-2">
           {anomalies.data.map((a) => (
             <li key={a.id} className="flex items-center justify-between rounded-lg border border-ocean-200 p-3 text-sm dark:border-ocean-800">
-              <span>
-                {a.domain} · {a.variable} · {new Date(a.detected_at).toLocaleDateString()}
+              <span className="flex flex-col">
+                <span>
+                  {a.variable} · {new Date(a.detected_at).toLocaleDateString()}
+                  {a.station_id !== null && (
+                    <span className="text-ocean-500"> · station {a.station_id}</span>
+                  )}
+                </span>
+                {a.metric_value !== null && a.threshold_value !== null && (
+                  // Without the observed value and the bar it cleared, every
+                  // row reads identically and the severity badge is unfalsifiable.
+                  <span className="text-xs text-ocean-500">
+                    {a.metric_value.toFixed(2)} vs threshold {a.threshold_value.toFixed(2)}
+                  </span>
+                )}
               </span>
               <AnomalyBadge severity={a.severity} />
             </li>

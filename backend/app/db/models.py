@@ -220,11 +220,15 @@ class MLPrediction(Base):
 
 class AnomalyEvent(Base):
     __tablename__ = "anomaly_events"
-    __table_args__ = (Index("idx_anomaly_domain_time", "domain", "detected_at"),)
+    __table_args__ = (
+        Index("idx_anomaly_domain_time", "domain", "detected_at"),
+        Index("idx_anomaly_station", "station_id"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     domain: Mapped[str] = mapped_column(Text, nullable=False)
     region_id: Mapped[int | None] = mapped_column(ForeignKey("regions.region_id"))
+    station_id: Mapped[int | None] = mapped_column(ForeignKey("oceanographic_stations.station_id"))
     variable: Mapped[str] = mapped_column(Text, nullable=False)
     detected_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     severity: Mapped[str | None] = mapped_column(Text)

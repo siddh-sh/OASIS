@@ -66,14 +66,24 @@ Thin proxies to Supabase Auth's REST API — no password handling in this app.
 | GET | `/api/admin/datasets/status` | Reads `datasets_metadata`: source, last sync, record count, license, cleaning notes |
 | POST | `/api/admin/sync/{source}` | 501 — wires a live collector re-run in Phase 7 |
 
-## Analytics — all 501 stubs (Phase 4/5/6)
+## Analytics — live (Phase 4)
+
+Backed by `backend/app/ml/`. Every predictive response embeds a `skill`
+object comparing the model to a persistence baseline, because two of the
+three models barely beat it — see [`model-cards.md`](model-cards.md).
+
+| Method | Path | Notes |
+|---|---|---|
+| GET | `/api/analytics/anomalies?region&domain&variable&severity&start_date&end_date&limit` | Detected events from `anomaly_events` (1,375 rows: 738 SST, 637 chlorophyll). `station_id` carries the location — satellite grid cells have no `region_id`. |
+| GET | `/api/analytics/anomalies/catch-decline?limit` | Species with declining catch trends over their last decade of record. Separate feed from point anomalies by design. |
+| GET | `/api/analytics/forecast/ocean-conditions?station_id&variable&horizon` | `variable` is `sst` or `chlorophyll_a`; `horizon` is 1–10 8-day composites. 404 if the station has no history for that variable (chlorophyll covers 177 of 458 stations). |
+| GET | `/api/analytics/predict/catch?species_id&region_id` | Next-year tonnage with SHAP attribution. Persists to `ml_predictions` and returns `prediction_id`. Needs ≥6 consecutive annual observations, else 404. |
+| GET | `/api/analytics/explain/{prediction_id}` | SHAP contributions for a stored prediction. Additive in the model's target space (log-tonnes for catch) — sum before exponentiating, never term by term. |
+
+### Still stubbed
 
 | Method | Path | Lands in |
 |---|---|---|
-| GET | `/api/analytics/predict/catch` | Phase 4 |
-| GET | `/api/analytics/forecast/ocean-conditions?station_id&horizon` | Phase 4 |
-| GET | `/api/analytics/anomalies?region&domain` | Phase 4 |
-| GET | `/api/analytics/explain/{prediction_id}` | Phase 4 |
 | GET | `/api/analytics/recommendation/{prediction_or_anomaly_id}` | Phase 5 |
 | GET | `/api/analytics/correlation?var1&var2&region` | Phase 6 (Should-Have) |
 

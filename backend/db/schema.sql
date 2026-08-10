@@ -275,10 +275,18 @@ create table ml_predictions (
     created_at          timestamptz not null default now()
 );
 
+-- Reconciliation: station_id and the natural key were added in migration
+-- 0003, once real detection ran. region_id alone cannot locate these events —
+-- SST and chlorophyll anomalies occur at satellite grid cells, and every
+-- satellite station has region_id NULL (open ocean, and regions.geom is not
+-- populated, so there is no spatial join to infer one). The unique index is
+-- partial because station_id is nullable and Postgres treats NULLs as
+-- distinct, which would let duplicates through on re-detection.
 create table anomaly_events (
     id                  bigserial primary key,
     domain              text not null,
     region_id           integer references regions(region_id),
+    station_id          integer references oceanographic_stations(station_id),
     variable            text not null,
     detected_at         timestamptz not null,
     severity            text,
@@ -286,6 +294,10 @@ create table anomaly_events (
     threshold_value     numeric
 );
 create index idx_anomaly_domain_time on anomaly_events (domain, detected_at);
+create index idx_anomaly_station on anomaly_events (station_id);
+create unique index uq_anomaly_variable_station_time
+    on anomaly_events (variable, station_id, detected_at)
+    where station_id is not null;
 
 create table recommendations (
     id                  bigserial primary key,

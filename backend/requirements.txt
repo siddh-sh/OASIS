@@ -11,5 +11,17 @@ email-validator==2.2.0
 PyJWT[crypto]==2.12.1
 httpx==0.27.2
 python-dotenv==1.0.1
+
+# ML layer (app/ml/, Phase 4). Gradient boosting comes from scikit-learn's
+# HistGradientBoostingRegressor rather than the xgboost package: it is the
+# same class of model, satisfies flow.md's "scikit-learn / XGBoost" choice,
+# and avoids adding a large binary wheel to a free-tier Render dyno.
+pandas==2.2.3
+scikit-learn==1.5.2
+shap==0.46.0
+# Pinned explicitly rather than relied on transitively via scikit-learn:
+# app/ml/registry.py imports it directly to read/write model artifacts.
+joblib==1.4.2
+
 pytest==8.2.0
 pytest-asyncio==0.23.6

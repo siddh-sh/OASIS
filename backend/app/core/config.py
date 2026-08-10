@@ -22,7 +22,18 @@ class Settings(BaseSettings):
     # shared HS256 secret rather than the newer JWKS/ES256 default. See
     # Dashboard -> Project Settings -> API -> JWT Settings.
     supabase_jwt_secret: str = ""
-    anthropic_api_key: str = ""
+
+    # LLM for the Phase-5 agent pipeline. Deliberately provider-agnostic
+    # rather than an ANTHROPIC_API_KEY: the project runs on free tiers, and
+    # Groq, Cerebras and OpenRouter are all OpenAI-API-compatible, so
+    # switching provider is a base_url + model change and nothing else.
+    # Keeping a second provider configurable is demo insurance — a
+    # rate-limited provider mid-evaluation is exactly the failure flow.md
+    # §15 asks us to plan for.
+    llm_provider: str = "groq"
+    llm_api_key: str = ""
+    llm_base_url: str = "https://api.groq.com/openai/v1"
+    llm_model: str = "llama-3.3-70b-versatile"
 
     # CORS: local Vite dev origin always allowed; add the deployed Vercel
     # origin via this env var once known (comma-separated).
