@@ -21,7 +21,7 @@ scikit-learn==1.5.2
 shap==0.46.0
 # Pinned explicitly rather than relied on transitively via scikit-learn:
 # app/ml/registry.py imports it directly to read/write model artifacts.
-joblib==1.4.2
+joblib==1.5.3
 
 pytest==8.2.0
 pytest-asyncio==0.23.6
