@@ -1,5 +1,5 @@
 import { KPITile } from '@/components/KPITile'
-import { MapView } from '@/components/MapView'
+import { MapView, type StationKind } from '@/components/MapView'
 import { useFisheriesSummary } from '@/hooks/useFisheriesData'
 import { useMolecularRecords } from '@/hooks/useMolecularData'
 import { useOceanReadingsSummary, useOceanStations } from '@/hooks/useOceanData'
@@ -48,22 +48,16 @@ export function DashboardPage() {
           Station & sensor coverage
         </h2>
         <MapView
+          legend
           markers={(stations.data?.items ?? []).map((s) => ({
             id: s.station_id,
             lat: s.lat,
             lon: s.lon,
-            colorClass:
-              s.station_type === 'in-situ-buoy'
-                ? 'bg-kelp-500'
-                : s.station_type === 'coastal-anchor'
-                  ? 'bg-coral-500'
-                  : 'bg-ocean-500',
-            popup: (
-              <div className="text-xs">
-                <div className="font-semibold">{s.name ?? `Grid cell ${s.station_id}`}</div>
-                <div>{s.station_type}</div>
-              </div>
-            ),
+            kind: s.station_type as StationKind,
+            title: s.name ?? `Grid cell ${s.station_id}`,
+            // MapView already renders the title and coordinates; this only
+            // adds what it doesn't know about.
+            popup: <div className="text-xs">{s.station_type}</div>,
           }))}
           height={420}
         />

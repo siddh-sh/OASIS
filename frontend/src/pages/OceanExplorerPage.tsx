@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { DataSourceBadge } from '@/components/DataSourceBadge'
 import { FilterField, FilterSidebar } from '@/components/FilterSidebar'
 import { LoadingRows } from '@/components/LoadingSkeleton'
-import { MapView } from '@/components/MapView'
+import { MapView, type StationKind } from '@/components/MapView'
 import { TimeSeriesChart } from '@/components/TimeSeriesChart'
 import { useOceanReadings, useOceanStations } from '@/hooks/useOceanData'
 import type { StationType } from '@/types/api'
@@ -50,11 +50,15 @@ export function OceanExplorerPage() {
 
         <div className="min-w-0 flex-1">
           <MapView
+            legend
             markers={(stations.data?.items ?? []).map((s) => ({
               id: s.station_id,
               lat: s.lat,
               lon: s.lon,
-              colorClass: s.station_id === selectedStation ? 'bg-coral-500' : 'bg-ocean-500',
+              kind: s.station_type as StationKind,
+              title:
+                (s.name ?? `Station #${s.station_id}`) +
+                (s.station_id === selectedStation ? ' (selected)' : ''),
               popup: (
                 <button className="text-xs font-medium underline" onClick={() => setSelectedStation(s.station_id)}>
                   {s.name ?? `Station #${s.station_id}`} — view readings

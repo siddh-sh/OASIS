@@ -85,7 +85,7 @@ export function SpeciesExplorerPage() {
           <MapView
             markers={(occurrences.data?.items ?? [])
               .filter((o) => o.lat !== null && o.lon !== null)
-              .map((o) => ({ id: o.id, lat: o.lat!, lon: o.lon!, colorClass: 'bg-kelp-500' }))}
+              .map((o) => ({ id: o.id, lat: o.lat!, lon: o.lon!, kind: 'occurrence' as const }))}
             height={380}
           />
           <div className="mt-2 flex flex-wrap gap-1">
