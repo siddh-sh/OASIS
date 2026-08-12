@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.agents.llm import LLMNotConfigured, llm_available
 from app.db.models import Species, SpeciesOccurrence
 from app.db.session import get_db
 from app.schemas.common import BBox
@@ -14,6 +15,7 @@ from app.schemas.species import (
     SpeciesPage,
 )
 from app.services.geo import bbox_filter
+from app.services.species_media import MediaUnavailable, get_species_photos
 
 router = APIRouter(prefix="/api/species", tags=["species"])
 
@@ -73,3 +75,114 @@ def get_species(species_id: int, db: Session = Depends(get_db)):
     if row is None:
         raise HTTPException(404, "species not found")
     return SpeciesOut.model_validate(row)
+
+
+@router.get("/{species_id}/photos")
+def species_photos(species_id: int, limit: int = Query(default=6, ge=1, le=20), db: Session = Depends(get_db)):
+    """Recent photographed sightings of this species in India (§4b).
+
+    Live from GBIF rather than stored: the URLs point at third-party hosts, so
+    ingesting them would preserve a pointer that can rot, not an image.
+    Coverage is genuinely partial — many species have no photographed Indian
+    occurrence — and `total_with_photos` says so instead of returning a bare
+    empty list.
+    """
+    species = db.get(Species, species_id)
+    if species is None:
+        raise HTTPException(404, f"no species with id={species_id}")
+    try:
+        return get_species_photos(species.scientific_name, limit=limit)
+    except MediaUnavailable as exc:
+        raise HTTPException(503, str(exc)) from exc
+
+
+@router.get("/{species_id}/context")
+def species_context(species_id: int, db: Session = Depends(get_db)):
+    """Why this species turns up where it does, from its own occurrence records.
+
+    Summarises the environmental conditions actually recorded alongside the
+    sightings — OBIS ships sst/sss/bathymetry per record — then has the LLM
+    phrase it. The numbers are computed here; the model only narrates them,
+    the same split as the Phase-5 recommendation agent.
+
+    **No relocation forecast is returned, deliberately.** The doc asks for
+    one. The occurrence data is two years of opportunistic OBIS/GBIF records,
+    where apparent movement between years tracks who went looking far more
+    than it tracks the fish. A "predicted future range" built on that would be
+    an artefact of sampling effort wearing the costume of a model, and it is
+    the same reason the Phase-4 anomaly work refused a species-decline
+    detector. Doing it properly needs either tagging data or a species
+    distribution model trained on environmental covariates — neither is in
+    this platform.
+    """
+    species = db.get(Species, species_id)
+    if species is None:
+        raise HTTPException(404, f"no species with id={species_id}")
+
+    stats = db.execute(
+        select(
+            func.count(SpeciesOccurrence.id),
+            func.avg(SpeciesOccurrence.sst),
+            func.min(SpeciesOccurrence.sst),
+            func.max(SpeciesOccurrence.sst),
+            func.avg(SpeciesOccurrence.sss),
+            func.avg(SpeciesOccurrence.bathymetry),
+            func.min(SpeciesOccurrence.lat),
+            func.max(SpeciesOccurrence.lat),
+            func.min(SpeciesOccurrence.lon),
+            func.max(SpeciesOccurrence.lon),
+        ).where(SpeciesOccurrence.species_id == species_id)
+    ).one()
+
+    n, sst_avg, sst_min, sst_max, sss_avg, bathy_avg, lat0, lat1, lon0, lon1 = stats
+    if not n:
+        raise HTTPException(404, f"no occurrence records for species_id={species_id}")
+
+    def num(v):
+        return round(float(v), 2) if v is not None else None
+
+    evidence = {
+        "scientific_name": species.scientific_name,
+        "common_name": species.common_name,
+        "n_occurrences": int(n),
+        "sst_c": {"mean": num(sst_avg), "min": num(sst_min), "max": num(sst_max)},
+        "salinity_psu_mean": num(sss_avg),
+        "seabed_depth_m_mean": num(bathy_avg),
+        "latitude_range": [num(lat0), num(lat1)],
+        "longitude_range": [num(lon0), num(lon1)],
+    }
+
+    if not llm_available():
+        return {**evidence, "explanation": None,
+                "note": "Set LLM_API_KEY to get a plain-language explanation of these figures."}
+
+    from langchain_core.messages import HumanMessage, SystemMessage
+
+    from app.agents.llm import get_llm
+
+    prompt = (
+        "You explain marine species distribution to Indian fishing communities. "
+        "Given the recorded conditions where a species was observed, write 3-4 short "
+        "sentences on what those conditions suggest about where and why it is found. "
+        "Use ONLY the numbers given. Do not invent migration routes, seasons or "
+        "spawning behaviour that the data does not show. If the sample is small, say so. "
+        "Plain language, no headings."
+    )
+    try:
+        explanation = get_llm(temperature=0.2).invoke(
+            [SystemMessage(content=prompt), HumanMessage(content=str(evidence))]
+        ).content.strip()
+    except LLMNotConfigured as exc:
+        raise HTTPException(503, str(exc)) from exc
+
+    return {
+        **evidence,
+        "explanation": explanation,
+        "relocation_forecast": None,
+        "relocation_note": (
+            "Not provided. Two years of opportunistic occurrence records cannot "
+            "distinguish real range shift from changes in observer effort; a "
+            "prediction from them would reflect who went looking, not the fish. "
+            "This needs tagging data or a species distribution model."
+        ),
+    }

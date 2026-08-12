@@ -1,8 +1,10 @@
 import { useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { DataSourceBadge } from '@/components/DataSourceBadge'
 import { FilterField, FilterSidebar } from '@/components/FilterSidebar'
 import { LoadingRows } from '@/components/LoadingSkeleton'
 import { MapView } from '@/components/MapView'
+import { speciesExtrasApi } from '@/api/species'
 import { useSpeciesList, useSpeciesOccurrences } from '@/hooks/useSpeciesData'
 import { showsTechnicalDetail, speciesLabel, useViewModeStore } from '@/store/viewMode'
 
@@ -14,6 +16,19 @@ export function SpeciesExplorerPage() {
   const species = useSpeciesList({ q: query || undefined, limit: 50 })
   const occurrences = useSpeciesOccurrences({ species_id: selectedSpecies, limit: 300 })
   const selected = species.data?.items.find((s) => s.species_id === selectedSpecies)
+
+  const photos = useQuery({
+    queryKey: ['species', 'photos', selectedSpecies],
+    queryFn: () => speciesExtrasApi.photos(selectedSpecies as number),
+    enabled: selectedSpecies !== undefined,
+    retry: false,
+  })
+  const context = useQuery({
+    queryKey: ['species', 'context', selectedSpecies],
+    queryFn: () => speciesExtrasApi.context(selectedSpecies as number),
+    enabled: selectedSpecies !== undefined,
+    retry: false,
+  })
 
   return (
     <div className="flex flex-col gap-6">
@@ -113,6 +128,61 @@ export function SpeciesExplorerPage() {
                   </div>
                 ))}
               </dl>
+              )}
+            </div>
+          )}
+
+          {selected && (photos.data?.photos.length ?? 0) > 0 && (
+            <div className="mb-4">
+              <h3 className="mb-2 text-sm font-semibold text-ocean-700 dark:text-ocean-200">
+                Recent sightings, photographed
+              </h3>
+              <div className="flex gap-3 overflow-x-auto pb-2">
+                {photos.data?.photos.map((p) => (
+                  <figure key={p.url} className="w-40 shrink-0">
+                    <img
+                      src={p.url}
+                      alt={selected.scientific_name}
+                      loading="lazy"
+                      className="h-28 w-40 rounded-md object-cover"
+                    />
+                    <figcaption className="mt-1 text-[11px] leading-tight text-ocean-500">
+                      <div>{p.grid_cell ?? '—'}{p.observed_at ? ` · ${p.observed_at.slice(0, 10)}` : ''}</div>
+                      {/* Attribution is not optional: these are CC-licensed
+                          photos by named people. */}
+                      <div className="truncate">
+                        {p.photographer ?? 'Unknown'} · {p.license ?? 'see source'}
+                      </div>
+                    </figcaption>
+                  </figure>
+                ))}
+              </div>
+              <p className="text-[11px] text-ocean-500">{photos.data?.source}</p>
+            </div>
+          )}
+
+          {selected && photos.isFetched && (photos.data?.photos.length ?? 0) === 0 && (
+            <p className="mb-4 text-xs text-ocean-500">
+              No photographed occurrence of this species in India is available from GBIF.
+            </p>
+          )}
+
+          {selected && context.data && (
+            <div className="mb-4 rounded-lg border border-ocean-200 p-4 text-sm dark:border-ocean-800">
+              <h3 className="mb-1 text-sm font-semibold text-ocean-700 dark:text-ocean-200">
+                Why it is found here
+              </h3>
+              {context.data.explanation ? (
+                <p className="text-ocean-600 dark:text-ocean-300">{context.data.explanation}</p>
+              ) : (
+                <p className="text-ocean-500">{context.data.note}</p>
+              )}
+              {context.data.relocation_note && (
+                // The doc asked for a relocation forecast. Saying why there
+                // isn't one is more useful than a number nobody should trust.
+                <p className="mt-2 text-xs text-ocean-500">
+                  <strong>Future relocation:</strong> {context.data.relocation_note}
+                </p>
               )}
             </div>
           )}
