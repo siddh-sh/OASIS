@@ -1,5 +1,6 @@
 import { Link, Outlet } from 'react-router-dom'
 import { NavSidebar } from '@/components/NavSidebar'
+import { ViewModeSwitcher } from '@/components/ViewModeSwitcher'
 import { useAuth } from '@/hooks/useAuth'
 
 export function AppLayout() {
@@ -14,6 +15,7 @@ export function AppLayout() {
             {profile ? `${profile.full_name ?? profile.email} · ${profile.role}` : 'Not signed in'}
           </span>
           <div className="flex items-center gap-4 text-sm">
+            <ViewModeSwitcher />
             <Link to="/settings" className="text-ocean-600 hover:underline dark:text-ocean-300">
               Settings
             </Link>

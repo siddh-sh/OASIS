@@ -4,11 +4,13 @@ import { FilterField, FilterSidebar } from '@/components/FilterSidebar'
 import { LoadingRows } from '@/components/LoadingSkeleton'
 import { MapView } from '@/components/MapView'
 import { useSpeciesList, useSpeciesOccurrences } from '@/hooks/useSpeciesData'
+import { showsTechnicalDetail, speciesLabel, useViewModeStore } from '@/store/viewMode'
 
 export function SpeciesExplorerPage() {
   const [query, setQuery] = useState('')
   const [selectedSpecies, setSelectedSpecies] = useState<number>()
 
+  const mode = useViewModeStore((s) => s.mode)
   const species = useSpeciesList({ q: query || undefined, limit: 50 })
   const occurrences = useSpeciesOccurrences({ species_id: selectedSpecies, limit: 300 })
   const selected = species.data?.items.find((s) => s.species_id === selectedSpecies)
@@ -19,6 +21,7 @@ export function SpeciesExplorerPage() {
         <h1 className="text-xl font-semibold text-ocean-950 dark:text-ocean-50">Species / Biodiversity Explorer</h1>
         <p className="text-sm text-ocean-500">
           Deduplicated across OBIS, GBIF, BOLD and Sea Around Us by binomial scientific name.
+          {mode !== 'researcher' && ' Showing common names where we have them.'}
         </p>
       </div>
 
@@ -41,13 +44,23 @@ export function SpeciesExplorerPage() {
                 <li key={s.species_id}>
                   <button
                     onClick={() => setSelectedSpecies(s.species_id)}
-                    className={`w-full rounded px-2 py-1 text-left italic ${
+                    className={`w-full rounded px-2 py-1 text-left ${
                       s.species_id === selectedSpecies
                         ? 'bg-ocean-600 text-white'
                         : 'hover:bg-ocean-100 dark:hover:bg-ocean-900'
                     }`}
                   >
-                    {s.scientific_name}
+                    {(() => {
+                      const l = speciesLabel(mode, s.scientific_name, s.common_name)
+                      return (
+                        <>
+                          <span className={l.primaryIsScientific ? 'italic' : ''}>{l.primary}</span>
+                          {l.secondary && (
+                            <span className="ml-1 text-xs italic opacity-70">{l.secondary}</span>
+                          )}
+                        </>
+                      )
+                    })()}
                   </button>
                 </li>
               ))}
@@ -58,10 +71,31 @@ export function SpeciesExplorerPage() {
         <div className="min-w-0 flex-1">
           {selected && (
             <div className="mb-4 rounded-lg border border-ocean-200 p-4 text-sm dark:border-ocean-800">
-              <h2 className="mb-1 text-base font-semibold italic text-ocean-950 dark:text-ocean-50">
-                {selected.scientific_name}
-              </h2>
-              {selected.common_name && <p className="mb-2 text-ocean-600 dark:text-ocean-300">{selected.common_name}</p>}
+              {(() => {
+                const l = speciesLabel(mode, selected.scientific_name, selected.common_name)
+                return (
+                  <>
+                    <h2
+                      className={`mb-1 text-base font-semibold text-ocean-950 dark:text-ocean-50 ${
+                        l.primaryIsScientific ? 'italic' : ''
+                      }`}
+                    >
+                      {l.primary}
+                    </h2>
+                    {l.secondary && (
+                      <p className="mb-2 italic text-ocean-600 dark:text-ocean-300">{l.secondary}</p>
+                    )}
+                    {/* Honest about the gap rather than silently showing Latin
+                        to an audience that asked for common names. */}
+                    {l.primaryIsScientific && mode !== 'researcher' && (
+                      <p className="mb-2 text-xs text-ocean-500">
+                        No common name recorded for this species — showing its scientific name.
+                      </p>
+                    )}
+                  </>
+                )
+              })()}
+              {showsTechnicalDetail(mode) && (
               <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-ocean-700 dark:text-ocean-300">
                 {(
                   [
@@ -79,6 +113,7 @@ export function SpeciesExplorerPage() {
                   </div>
                 ))}
               </dl>
+              )}
             </div>
           )}
 
