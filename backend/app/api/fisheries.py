@@ -1,10 +1,10 @@
 from datetime import date
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.db.models import FisheriesCatch, FisheriesNationalTotal, Region
+from app.db.models import FisheriesCatch, FisheriesNationalTotal, Region, Species
 from app.db.session import get_db
 from app.schemas.fisheries import (
     FisheriesCatchOut,
@@ -79,3 +79,136 @@ def summary(
         national_totals=[FisheriesNationalTotalOut.model_validate(r) for r in totals],
         granular_catch=[FisheriesCatchOut.model_validate(r) for r in catch_rows],
     )
+
+
+@router.get("/filters")
+def catch_filters(db: Session = Depends(get_db)):
+    """Regions and species that actually have catch rows.
+
+    Driving the dropdowns from this rather than from the full tables matters:
+    `species` holds 1,482 rows but only 110 have any catch history, so the
+    other 1,372 would be dead options.
+    """
+    regions = db.execute(
+        select(Region.region_id, Region.name)
+        .join(FisheriesCatch, FisheriesCatch.region_id == Region.region_id)
+        .group_by(Region.region_id, Region.name)
+        .order_by(Region.name)
+    ).all()
+
+    species = db.execute(
+        select(
+            Species.species_id,
+            Species.scientific_name,
+            Species.common_name,
+            func.sum(FisheriesCatch.catch_weight_kg).label("total"),
+        )
+        .join(FisheriesCatch, FisheriesCatch.species_id == Species.species_id)
+        .group_by(Species.species_id, Species.scientific_name, Species.common_name)
+        .order_by(func.sum(FisheriesCatch.catch_weight_kg).desc())
+    ).all()
+
+    return {
+        "regions": [{"region_id": r[0], "name": r[1]} for r in regions],
+        # Ordered by total catch so the dropdown opens on the species that
+        # matter, not alphabetically on something landing three tonnes.
+        "species": [
+            {
+                "species_id": s_[0],
+                "scientific_name": s_[1],
+                "common_name": s_[2],
+                "total_tonnes": round(float(s_[3]) / 1000, 1),
+            }
+            for s_ in species
+        ],
+    }
+
+
+@router.get("/timeseries")
+def catch_timeseries(
+    group_by: str = Query(default="none", description="none | species | region"),
+    region_id: int | None = None,
+    species_id: int | None = None,
+    start_year: int | None = None,
+    end_year: int | None = None,
+    top_n: int = Query(default=8, ge=1, le=20, description="series kept when grouping"),
+    db: Session = Depends(get_db),
+):
+    """Annual catch, optionally broken down by species or region.
+
+    `top_n` exists because grouping by species yields 110 series — unreadable
+    as a chart and useless as a legend. The largest are kept by total catch
+    and the rest collapsed into one "Other" series, so yearly totals still add
+    up instead of silently losing the tail.
+    """
+    if group_by not in ("none", "species", "region"):
+        raise HTTPException(422, "group_by must be one of: none, species, region")
+
+    year = func.extract("year", FisheriesCatch.catch_date).label("year")
+    tonnes = (func.sum(FisheriesCatch.catch_weight_kg) / 1000.0).label("tonnes")
+
+    if group_by == "species":
+        key = Species.species_id
+        label = func.coalesce(Species.common_name, Species.scientific_name)
+    elif group_by == "region":
+        key, label = Region.region_id, Region.name
+    else:
+        key = label = None
+
+    stmt = select(year, tonnes) if key is None else select(year, key.label("key"), label.label("label"), tonnes)
+    if group_by == "species":
+        stmt = stmt.join(Species, Species.species_id == FisheriesCatch.species_id)
+    elif group_by == "region":
+        stmt = stmt.join(Region, Region.region_id == FisheriesCatch.region_id)
+
+    if region_id is not None:
+        stmt = stmt.where(FisheriesCatch.region_id == region_id)
+    if species_id is not None:
+        stmt = stmt.where(FisheriesCatch.species_id == species_id)
+    if start_year is not None:
+        stmt = stmt.where(year >= start_year)
+    if end_year is not None:
+        stmt = stmt.where(year <= end_year)
+
+    stmt = stmt.group_by(year) if key is None else stmt.group_by(year, key, label)
+    rows = db.execute(stmt.order_by(year)).all()
+
+    meta = {"unit": "tonnes", "source": "Sea Around Us reconstruction (CC-BY-NC-SA 4.0)"}
+
+    if key is None:
+        return {
+            "group_by": group_by,
+            "series": [{
+                "key": "total",
+                "label": "Total catch",
+                "points": [{"year": int(r[0]), "tonnes": round(float(r[1]), 1)} for r in rows],
+            }],
+            **meta,
+        }
+
+    totals: dict[int, float] = {}
+    labels: dict[int, str] = {}
+    for _, k, lbl, t in rows:
+        totals[k] = totals.get(k, 0.0) + float(t)
+        labels[k] = lbl
+    keep = {k for k, _ in sorted(totals.items(), key=lambda kv: kv[1], reverse=True)[:top_n]}
+    n_other = len(totals) - len(keep)
+
+    series: dict[str, dict] = {}
+    for yr, k, _lbl, t in rows:
+        bucket = str(k) if k in keep else "other"
+        name = labels[k] if k in keep else f"Other ({n_other} more)"
+        entry = series.setdefault(bucket, {"key": bucket, "label": name, "_by_year": {}})
+        entry["_by_year"][int(yr)] = entry["_by_year"].get(int(yr), 0.0) + float(t)
+
+    out = [
+        {
+            "key": e["key"],
+            "label": e["label"],
+            "points": [{"year": y, "tonnes": round(v, 1)} for y, v in sorted(e["_by_year"].items())],
+        }
+        for e in series.values()
+    ]
+    out.sort(key=lambda s_: (s_["key"] == "other", -sum(p["tonnes"] for p in s_["points"])))
+
+    return {"group_by": group_by, "series": out, **meta}
