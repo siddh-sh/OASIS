@@ -132,3 +132,4 @@ than mock — when no database is configured.
 - [`docs/demo-script.md`](docs/demo-script.md) — walkthrough for a live evaluation
 - [`docs/supabase-setup.md`](docs/supabase-setup.md) — provisioning Supabase
 - [`docs/developer-c-week1-flow.md`](docs/developer-c-week1-flow.md) — data collection/schema decisions and why
+example
