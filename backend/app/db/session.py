@@ -6,6 +6,7 @@ one DATABASE_URL, three consumers.
 """
 from collections.abc import Generator
 
+from fastapi import HTTPException
 from sqlalchemy import create_engine
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
@@ -32,9 +33,15 @@ SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, futu
 
 def get_db() -> Generator[Session, None, None]:
     if SessionLocal is None:
-        raise RuntimeError(
+        # HTTPException (not a raw RuntimeError) so it's caught by FastAPI's
+        # exception middleware, which sits inside CORSMiddleware — a raw
+        # exception propagates past CORSMiddleware entirely and the browser
+        # sees a response with no CORS headers, which surfaces as an opaque
+        # "Failed to fetch" instead of this message.
+        raise HTTPException(
+            503,
             "DATABASE_URL is not configured — copy .env.example to .env and "
-            "fill in the Supabase connection string (see docs/supabase-setup.md)."
+            "fill in the Supabase connection string (see docs/supabase-setup.md).",
         )
     db = SessionLocal()
     try:

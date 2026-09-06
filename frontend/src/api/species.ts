@@ -26,6 +26,7 @@ export interface SpeciesPhoto {
 
 export interface SpeciesPhotos {
   total_with_photos: number
+  recent_window_days: number
   photos: SpeciesPhoto[]
   source: string
 }
@@ -40,7 +41,15 @@ export interface SpeciesContext {
   note?: string
 }
 
+export interface SpeciesRegion {
+  region_id: number
+  name: string
+  occurrence_count: number
+  polygon: [number, number][]
+}
+
 export const speciesExtrasApi = {
   photos: (speciesId: number) => apiFetch<SpeciesPhotos>(`/api/species/${speciesId}/photos?limit=6`),
   context: (speciesId: number) => apiFetch<SpeciesContext>(`/api/species/${speciesId}/context`),
+  regions: (speciesId: number) => apiFetch<{ regions: SpeciesRegion[] }>(`/api/species/${speciesId}/regions`),
 }

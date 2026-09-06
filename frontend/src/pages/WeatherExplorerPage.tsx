@@ -24,10 +24,9 @@ const dayName = (iso: string) =>
   new Date(iso).toLocaleDateString(undefined, { weekday: 'short' })
 
 export function WeatherExplorerPage() {
-  // §3a: the three states the platform serves are the default, but the other
-  // six coastal states stay loaded and one click away — scoping the view is
-  // not the same as discarding data.
-  const [priorityOnly, setPriorityOnly] = useState(true)
+  // §3a: all coastal states are shown by default; Kerala, Goa & Odisha are
+  // the platform's priority states and stay one click away via the checkbox.
+  const [priorityOnly, setPriorityOnly] = useState(false)
   const [stationId, setStationId] = useState<number>()
 
   const stations = useQuery({

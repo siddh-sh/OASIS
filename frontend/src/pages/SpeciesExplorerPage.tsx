@@ -22,10 +22,21 @@ export function SpeciesExplorerPage() {
     queryFn: () => speciesExtrasApi.photos(selectedSpecies as number),
     enabled: selectedSpecies !== undefined,
     retry: false,
+    // The backend re-queries GBIF at most once an hour per species (its own
+    // cache); polling here just means a newly-uploaded photo appears while
+    // this page is left open, without the visitor needing to reselect the
+    // species or reload.
+    refetchInterval: 10 * 60 * 1000,
   })
   const context = useQuery({
     queryKey: ['species', 'context', selectedSpecies],
     queryFn: () => speciesExtrasApi.context(selectedSpecies as number),
+    enabled: selectedSpecies !== undefined,
+    retry: false,
+  })
+  const regions = useQuery({
+    queryKey: ['species', 'regions', selectedSpecies],
+    queryFn: () => speciesExtrasApi.regions(selectedSpecies as number),
     enabled: selectedSpecies !== undefined,
     retry: false,
   })
@@ -134,9 +145,13 @@ export function SpeciesExplorerPage() {
 
           {selected && (photos.data?.photos.length ?? 0) > 0 && (
             <div className="mb-4">
-              <h3 className="mb-2 text-sm font-semibold text-ocean-700 dark:text-ocean-200">
+              <h3 className="text-sm font-semibold text-ocean-700 dark:text-ocean-200">
                 Recent sightings, photographed
               </h3>
+              <p className="mb-2 text-[11px] text-ocean-500">
+                Photographed within the last {photos.data?.recent_window_days} days. Refreshes automatically as
+                new sightings are uploaded.
+              </p>
               <div className="flex gap-3 overflow-x-auto pb-2">
                 {photos.data?.photos.map((p) => (
                   <figure key={p.url} className="w-40 shrink-0">
@@ -163,7 +178,14 @@ export function SpeciesExplorerPage() {
 
           {selected && photos.isFetched && (photos.data?.photos.length ?? 0) === 0 && (
             <p className="mb-4 text-xs text-ocean-500">
-              No photographed occurrence of this species in India is available from GBIF.
+              {(photos.data?.total_with_photos ?? 0) > 0 ? (
+                <>
+                  No recent photos of this species found (last {photos.data?.recent_window_days} days) — this
+                  section will update automatically if a new sighting is photographed.
+                </>
+              ) : (
+                'No photographed occurrence of this species in India is available from GBIF.'
+              )}
             </p>
           )}
 
@@ -191,12 +213,29 @@ export function SpeciesExplorerPage() {
             markers={(occurrences.data?.items ?? [])
               .filter((o) => o.lat !== null && o.lon !== null)
               .map((o) => ({ id: o.id, lat: o.lat!, lon: o.lon!, kind: 'occurrence' as const }))}
+            regionShapes={(regions.data?.regions ?? []).map((r) => ({
+              id: r.region_id,
+              name: r.name,
+              positions: r.polygon,
+            }))}
             height={380}
           />
-          <div className="mt-2 flex flex-wrap gap-1">
+          <div className="mt-2 flex flex-wrap items-center gap-2">
             {[...new Set((occurrences.data?.items ?? []).map((o) => o.source))].map((s) => (
               <DataSourceBadge key={s} source={s} />
             ))}
+            {selected && regions.isFetched && (
+              <span className="text-[11px] text-ocean-500">
+                {regions.data && regions.data.regions.length > 0 ? (
+                  <>
+                    Found in: {regions.data.regions.map((r) => r.name).join(', ')} (shaded above — a
+                    simplified state outline, not a surveyed boundary).
+                  </>
+                ) : (
+                  'No sightings fall within a coastal state boundary we have on file (open water, or outside the 9 states covered).'
+                )}
+              </span>
+            )}
           </div>
         </div>
       </div>

@@ -132,6 +132,36 @@ def load_regions(cur):
     return dict(cur.fetchall())
 
 
+def load_region_boundaries(cur):
+    """Backfill regions.geom for the 9 coastal states from the simplified
+    boundary seeds in seeds/raw/regions/.
+
+    Source: GADM v1 administrative boundaries (via the geohacker/india
+    mirror), simplified from ~15k-75k points per state down to a few hundred
+    with Douglas-Peucker and reduced to each state's largest ring only
+    (small offshore islands/exclaves dropped). This is an illustrative
+    shape for "where roughly is this state," not a surveyed legal boundary —
+    GADM is free for academic/non-commercial use, not for authoritative
+    cartography. EEZ regions (no `state`) are not covered; there is no
+    equally simple public source for those and none is fabricated here.
+    """
+    dir_ = RAW / "regions"
+    if not dir_.exists():
+        print("  regions geom                      no seed files, skipped")
+        return
+    updated = 0
+    for path in sorted(dir_.glob("*.geojson")):
+        name = path.stem.replace("_", " ").title()
+        geojson = path.read_text(encoding="utf-8")
+        cur.execute(
+            "update regions set geom = ST_SetSRID(ST_GeomFromGeoJSON(%s), 4326)::geography "
+            "where name = %s",
+            (geojson, name),
+        )
+        updated += cur.rowcount
+    print(f"  {'regions geom':34s} {updated:>7,} rows updated")
+
+
 def load_stations(cur, regions):
     """Coastal anchors, buoys and satellite grid cells all live in one table,
     separated by station_type (see schema.sql reconciliation note)."""
@@ -434,6 +464,9 @@ def record_metadata(cur):
         # Cite per https://seaaroundus.org/citation-policy/
         ("SAU", "fisheries", "CC-BY-NC-SA 4.0"),
         ("BOLD", "genomics", "BOLD terms of use"),
+        # Simplified state boundaries only (see load_region_boundaries) --
+        # illustrative, not surveyed cartography.
+        ("GADM-derived (geohacker/india)", "boundaries", "free for academic/non-commercial use"),
     ]
     execute_values(cur,
                    "insert into datasets_metadata (source_name, dataset_type, license, "
@@ -473,6 +506,7 @@ def main():
 
             print("Loading reference data ...")
             regions = load_regions(cur)
+            load_region_boundaries(cur)
             stations = load_stations(cur, regions)
             species = load_species(cur)
 

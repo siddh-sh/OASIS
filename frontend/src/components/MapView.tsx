@@ -1,7 +1,7 @@
 import { DivIcon, type LatLngBoundsExpression } from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { useState } from 'react'
-import { MapContainer, Marker, Popup, TileLayer, useMapEvents } from 'react-leaflet'
+import { MapContainer, Marker, Polygon, Popup, TileLayer, useMapEvents } from 'react-leaflet'
 import MarkerClusterGroup from 'react-leaflet-cluster'
 
 // India coastal bbox center — matches the region every collector in
@@ -110,6 +110,8 @@ interface MapViewProps {
   cluster?: boolean
   /** Show the station-type key. Off where every marker is the same kind. */
   legend?: boolean
+  /** Named region boundaries to shade — e.g. the state(s) a species was found in. */
+  regionShapes?: { id: string | number; name: string; positions: [number, number][] }[]
 }
 
 /**
@@ -142,6 +144,7 @@ export function MapView({
   zoom = DEFAULT_ZOOM,
   cluster = true,
   legend = false,
+  regionShapes,
 }: MapViewProps) {
   const markerEls = markers.map((m) => {
     const coords = formatCoords(m.lat, m.lon)
@@ -186,6 +189,17 @@ export function MapView({
           bounds={INDIA_BOUNDS}
           noWrap
         />
+        {regionShapes?.map((r) => (
+          <Polygon
+            key={r.id}
+            positions={r.positions}
+            pathOptions={{ color: '#15803d', weight: 1.5, fillColor: '#15803d', fillOpacity: 0.12 }}
+          >
+            <Popup>
+              <div className="text-xs font-medium">{r.name}</div>
+            </Popup>
+          </Polygon>
+        ))}
         {cluster ? <MarkerClusterGroup chunkedLoading>{markerEls}</MarkerClusterGroup> : markerEls}
         <CursorCoords />
       </MapContainer>

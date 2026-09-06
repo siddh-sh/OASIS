@@ -1,11 +1,14 @@
+import json
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import func, select
+from geoalchemy2.functions import ST_AsGeoJSON, ST_Contains
+from geoalchemy2.types import Geometry
+from sqlalchemy import cast, func, select
 from sqlalchemy.orm import Session
 
 from app.agents.llm import LLMNotConfigured, llm_available
-from app.db.models import Species, SpeciesOccurrence
+from app.db.models import Region, Species, SpeciesOccurrence
 from app.db.session import get_db
 from app.schemas.common import BBox
 from app.schemas.species import (
@@ -36,7 +39,12 @@ def list_species(
         stmt = stmt.where(Species.kingdom == kingdom)
 
     total = db.scalar(select(func.count()).select_from(stmt.subquery()))
-    rows = db.scalars(stmt.order_by(Species.scientific_name).limit(limit).offset(offset)).all()
+    # Species with a common name first (110 of 1,482 have one) — otherwise an
+    # unfiltered, alphabetical-by-scientific-name list buries them at random
+    # and a non-researcher view mode never gets to show what it has.
+    rows = db.scalars(
+        stmt.order_by(Species.common_name.is_(None), Species.scientific_name).limit(limit).offset(offset)
+    ).all()
     return SpeciesPage(items=[SpeciesOut.model_validate(r) for r in rows], total=total or 0, limit=limit, offset=offset)
 
 
@@ -94,6 +102,55 @@ def species_photos(species_id: int, limit: int = Query(default=6, ge=1, le=20), 
         return get_species_photos(species.scientific_name, limit=limit)
     except MediaUnavailable as exc:
         raise HTTPException(503, str(exc)) from exc
+
+
+@router.get("/{species_id}/regions")
+def species_regions(species_id: int, db: Session = Depends(get_db)):
+    """Which coastal state(s) this species' occurrences fall within.
+
+    Point-in-polygon against `regions.geom` — not a stored relationship,
+    since `species_occurrences` only carries lat/lon, not a region_id. Only
+    the 9 coastal states have a boundary loaded (simplified from GADM, see
+    `data-pipeline/cleaning/load_seeds.py:load_region_boundaries`); the EEZ
+    regions and "Open Indian Ocean" have none, so open-water occurrences
+    simply match no region rather than a fabricated one.
+    """
+    species = db.get(Species, species_id)
+    if species is None:
+        raise HTTPException(404, f"no species with id={species_id}")
+
+    region_geom = cast(Region.geom, Geometry(srid=4326))
+    occ_geom = cast(SpeciesOccurrence.geom, Geometry(srid=4326))
+
+    rows = db.execute(
+        select(
+            Region.region_id,
+            Region.name,
+            func.count(SpeciesOccurrence.id),
+            ST_AsGeoJSON(Region.geom),
+        )
+        .join(SpeciesOccurrence, ST_Contains(region_geom, occ_geom))
+        .where(SpeciesOccurrence.species_id == species_id, Region.geom.isnot(None))
+        .group_by(Region.region_id, Region.name, Region.geom)
+        .order_by(func.count(SpeciesOccurrence.id).desc())
+    ).all()
+
+    def polygon_latlon(geojson_str: str) -> list[list[float]]:
+        # GeoJSON is [lon, lat]; the frontend map wants [lat, lon].
+        ring = json.loads(geojson_str)["coordinates"][0]
+        return [[lat, lon] for lon, lat in ring]
+
+    return {
+        "regions": [
+            {
+                "region_id": region_id,
+                "name": name,
+                "occurrence_count": count,
+                "polygon": polygon_latlon(geojson_str),
+            }
+            for region_id, name, count, geojson_str in rows
+        ]
+    }
 
 
 @router.get("/{species_id}/context")

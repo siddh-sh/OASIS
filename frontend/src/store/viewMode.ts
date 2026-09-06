@@ -47,7 +47,7 @@ interface ViewModeState {
 export const useViewModeStore = create<ViewModeState>()(
   persist(
     (set) => ({
-      mode: 'researcher',
+      mode: 'student',
       setMode: (mode) => set({ mode }),
     }),
     { name: 'oasis-view-mode' },

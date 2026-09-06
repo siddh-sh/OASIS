@@ -14,10 +14,26 @@ optional and the UI renders them.
 Coverage is genuinely partial: many species in the catalogue have no
 photographed occurrence in India at all. The response says how many were
 found rather than quietly returning an empty list.
+
+`photos` is restricted to sightings from the last RECENT_WINDOW_DAYS, filtered
+server-side via GBIF's own `eventDate` range parameter rather than by
+sampling an arbitrary page of results and checking dates client-side — the
+latter silently misses genuinely recent records for any heavily-photographed
+species (e.g. a common bird with thousands of matches, where an unsorted
+100-row sample can easily contain none of the last N days' uploads even
+though they exist). Showing a months- or years-old photo under a "recent
+sightings" heading is also misleading, so an empty window means an empty
+list, not a stale fallback — `total_with_photos` (a second, unfiltered
+lookup, made only when the windowed one comes back empty) tells the caller
+sightings exist even when none are recent, so the UI can say which is true.
+The 1-hour cache means a genuinely new upload surfaces here within the hour,
+not instantly, but this is a live GBIF query rather than an ingested
+snapshot, so it never gets more stale than that.
 """
 from __future__ import annotations
 
 import time
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import requests
@@ -25,6 +41,10 @@ import requests
 GBIF_SEARCH = "https://api.gbif.org/v1/occurrence/search"
 CACHE_TTL = 3600
 TIMEOUT = 25
+# 30-90 days was the accepted range for "recent" once actual upload volume
+# per species was clear (a strict 7-day window left almost every species,
+# including heavily-photographed ones, empty almost always) — 60 splits it.
+RECENT_WINDOW_DAYS = 60
 
 _cache: dict[tuple[str, str], tuple[float, dict[str, Any]]] = {}
 
@@ -49,6 +69,9 @@ def get_species_photos(
     if hit and time.time() - hit[0] < CACHE_TTL:
         return hit[1]
 
+    today = datetime.now(UTC).date()
+    window_start = today - timedelta(days=RECENT_WINDOW_DAYS)
+
     try:
         resp = requests.get(
             GBIF_SEARCH,
@@ -56,7 +79,10 @@ def get_species_photos(
                 "scientificName": scientific_name,
                 "mediaType": "StillImage",
                 "country": country,
-                "limit": limit,
+                # Server-side recency filter — see module docstring for why
+                # this replaced sampling-then-checking-dates client-side.
+                "eventDate": f"{window_start.isoformat()},{today.isoformat()}",
+                "limit": max(limit, 50),
             },
             timeout=TIMEOUT,
         )
@@ -65,8 +91,16 @@ def get_species_photos(
     except requests.RequestException as exc:
         raise MediaUnavailable(f"GBIF request failed: {exc}") from exc
 
+    # Still no date-sort parameter on this endpoint — everything returned is
+    # already within the window, but not in date order, so sort what we got.
+    results = sorted(
+        raw.get("results", []), key=lambda occ: occ.get("eventDate") or "", reverse=True
+    )
+
     photos = []
-    for occ in raw.get("results", []):
+    for occ in results:
+        if len(photos) >= limit:
+            break
         media = occ.get("media") or []
         image = next((m for m in media if m.get("identifier")), None)
         if not image:
@@ -88,10 +122,35 @@ def get_species_photos(
             "gbif_occurrence_id": occ.get("key"),
         })
 
+    # `raw["count"]` above is scoped to the recency window. When nothing
+    # recent turned up, a second, unfiltered, limit=1 lookup (cheap — one
+    # result requested) gets the all-time count instead, purely so the UI can
+    # tell "nothing recent, but N exist historically" apart from "nothing has
+    # ever been photographed here." Skipped on the common path where the
+    # windowed query already found something, to avoid a second call.
+    total_with_photos = raw.get("count", 0)
+    if not photos:
+        try:
+            resp2 = requests.get(
+                GBIF_SEARCH,
+                params={
+                    "scientificName": scientific_name,
+                    "mediaType": "StillImage",
+                    "country": country,
+                    "limit": 1,
+                },
+                timeout=TIMEOUT,
+            )
+            resp2.raise_for_status()
+            total_with_photos = resp2.json().get("count", 0)
+        except requests.RequestException:
+            pass  # best-effort — worst case the empty-state message undersells older coverage
+
     payload = {
         "scientific_name": scientific_name,
         "country": country,
-        "total_with_photos": raw.get("count", 0),
+        "total_with_photos": total_with_photos,
+        "recent_window_days": RECENT_WINDOW_DAYS,
         "photos": photos,
         "source": "GBIF occurrence media (live). Photos are CC-licensed; attribution shown per image.",
     }

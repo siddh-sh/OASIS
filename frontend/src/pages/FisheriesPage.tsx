@@ -137,6 +137,8 @@ export function FisheriesPage() {
                 <Tooltip
                   formatter={(value, name) => [`${Number(value).toLocaleString()} t`, String(name)]}
                   labelFormatter={(l) => `Year ${l}`}
+                  contentStyle={{ borderRadius: 8, border: '1px solid var(--color-ocean-200)', fontSize: 13 }}
+                  labelStyle={{ fontWeight: 600, color: '#0f172a' }}
                 />
                 <Legend wrapperStyle={{ fontSize: 11 }} />
                 {series.map((s, i) => (
