@@ -83,6 +83,7 @@ export interface Species {
   genus: string | null
   species_epithet: string | null
   iucn_status: string | null
+  vernacular_name?: string | null
 }
 
 export interface SpeciesOccurrence {

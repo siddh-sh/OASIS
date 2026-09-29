@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { AppLayout } from '@/components/AppLayout'
 import { RequireAuth } from '@/components/RequireAuth'
+import { useGeoLanguage } from '@/hooks/useGeoLanguage'
 import { AdminPage } from '@/pages/AdminPage'
 import { ChatbotPage } from '@/pages/ChatbotPage'
 import { CorrelationPage } from '@/pages/CorrelationPage'
@@ -26,6 +27,11 @@ function App() {
     const { accessToken, profile, fetchProfile } = useAuthStore.getState()
     if (accessToken && !profile) void fetchProfile()
   }, [])
+
+  // Runs pre-login too, so the language is already right by the time
+  // someone reaches the login screen — see useGeoLanguage.ts for why it's
+  // silent-by-design and never overrides an explicit choice.
+  useGeoLanguage()
 
   return (
     <Routes>

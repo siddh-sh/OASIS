@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import { useTranslation } from 'react-i18next'
 import { DataSourceBadge } from '@/components/DataSourceBadge'
 import { FilterField, FilterSidebar } from '@/components/FilterSidebar'
 import { LoadingRows } from '@/components/LoadingSkeleton'
@@ -9,11 +10,18 @@ import { useSpeciesList, useSpeciesOccurrences } from '@/hooks/useSpeciesData'
 import { showsTechnicalDetail, speciesLabel, useViewModeStore } from '@/store/viewMode'
 
 export function SpeciesExplorerPage() {
+  const { t, i18n } = useTranslation()
   const [query, setQuery] = useState('')
   const [selectedSpecies, setSelectedSpecies] = useState<number>()
 
   const mode = useViewModeStore((s) => s.mode)
-  const species = useSpeciesList({ q: query || undefined, limit: 50 })
+  // English has no vernacular_name rows at all (common_name already covers
+  // it) — skip sending the param so the backend doesn't run a pointless join.
+  const species = useSpeciesList({
+    q: query || undefined,
+    language: i18n.language !== 'en' ? i18n.language : undefined,
+    limit: 50,
+  })
   const occurrences = useSpeciesOccurrences({ species_id: selectedSpecies, limit: 300 })
   const selected = species.data?.items.find((s) => s.species_id === selectedSpecies)
 
@@ -21,7 +29,12 @@ export function SpeciesExplorerPage() {
     queryKey: ['species', 'photos', selectedSpecies],
     queryFn: () => speciesExtrasApi.photos(selectedSpecies as number),
     enabled: selectedSpecies !== undefined,
-    retry: false,
+    // GBIF itself (not our backend) occasionally 429s under bursty traffic —
+    // a couple of backed-off retries recovers from that automatically,
+    // rather than immediately showing "no photos" for what is actually a
+    // transient upstream error.
+    retry: 2,
+    retryDelay: (attempt) => 1000 * 2 ** attempt,
     // The backend re-queries GBIF at most once an hour per species (its own
     // cache); polling here just means a newly-uploaded photo appears while
     // this page is left open, without the visitor needing to reselect the
@@ -40,13 +53,23 @@ export function SpeciesExplorerPage() {
     enabled: selectedSpecies !== undefined,
     retry: false,
   })
+  const vernacularNames = useQuery({
+    queryKey: ['species', 'vernacular-names', selectedSpecies],
+    queryFn: () => speciesExtrasApi.vernacularNames(selectedSpecies as number),
+    enabled: selectedSpecies !== undefined,
+    retry: false,
+  })
+  // Only fetched/applied for the selected species' detail panel, not the
+  // sidebar list — labelling all 50 visible list rows would mean 50 extra
+  // requests just to populate a dropdown.
+  const vernacularName = vernacularNames.data?.names[i18n.language]?.name
 
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h1 className="text-xl font-semibold text-ocean-950 dark:text-ocean-50">Species / Biodiversity Explorer</h1>
+        <h1 className="text-xl font-semibold text-ocean-950 dark:text-ocean-50">{t('pages.species.title')}</h1>
         <p className="text-sm text-ocean-500">
-          Deduplicated across OBIS, GBIF, BOLD and Sea Around Us by binomial scientific name.
+          {t('pages.species.subtitle')}
           {mode !== 'researcher' && ' Showing common names where we have them.'}
         </p>
       </div>
@@ -77,7 +100,7 @@ export function SpeciesExplorerPage() {
                     }`}
                   >
                     {(() => {
-                      const l = speciesLabel(mode, s.scientific_name, s.common_name)
+                      const l = speciesLabel(mode, s.scientific_name, s.common_name, s.vernacular_name)
                       return (
                         <>
                           <span className={l.primaryIsScientific ? 'italic' : ''}>{l.primary}</span>
@@ -98,7 +121,7 @@ export function SpeciesExplorerPage() {
           {selected && (
             <div className="mb-4 rounded-lg border border-ocean-200 p-4 text-sm dark:border-ocean-800">
               {(() => {
-                const l = speciesLabel(mode, selected.scientific_name, selected.common_name)
+                const l = speciesLabel(mode, selected.scientific_name, selected.common_name, vernacularName)
                 return (
                   <>
                     <h2
@@ -110,6 +133,14 @@ export function SpeciesExplorerPage() {
                     </h2>
                     {l.secondary && (
                       <p className="mb-2 italic text-ocean-600 dark:text-ocean-300">{l.secondary}</p>
+                    )}
+                    {/* Attribution, same reasoning as the photo credits below:
+                        this is a real term sourced from a named reference,
+                        not a machine translation, and that's worth saying. */}
+                    {vernacularName && l.primary === vernacularName && (
+                      <p className="mb-2 text-xs text-ocean-500">
+                        Regional name via {vernacularNames.data?.names[i18n.language]?.source}.
+                      </p>
                     )}
                     {/* Honest about the gap rather than silently showing Latin
                         to an audience that asked for common names. */}
@@ -146,11 +177,20 @@ export function SpeciesExplorerPage() {
           {selected && (photos.data?.photos.length ?? 0) > 0 && (
             <div className="mb-4">
               <h3 className="text-sm font-semibold text-ocean-700 dark:text-ocean-200">
-                Recent sightings, photographed
+                {photos.data?.photos_are_recent ? 'Recent sightings, photographed' : 'Sightings, photographed'}
               </h3>
               <p className="mb-2 text-[11px] text-ocean-500">
-                Photographed within the last {photos.data?.recent_window_days} days. Refreshes automatically as
-                new sightings are uploaded.
+                {photos.data?.photos_are_recent ? (
+                  <>
+                    Photographed within the last {photos.data?.recent_window_days} days. Refreshes automatically
+                    as new sightings are uploaded.
+                  </>
+                ) : (
+                  <>
+                    Nothing photographed in the last {photos.data?.recent_window_days} days — showing the newest
+                    available regardless of age (see the date on each photo below).
+                  </>
+                )}
               </p>
               <div className="flex gap-3 overflow-x-auto pb-2">
                 {photos.data?.photos.map((p) => (
@@ -176,7 +216,14 @@ export function SpeciesExplorerPage() {
             </div>
           )}
 
-          {selected && photos.isFetched && (photos.data?.photos.length ?? 0) === 0 && (
+          {selected && photos.isError && (
+            <p className="mb-4 text-xs text-amber-600 dark:text-amber-400">
+              Photos are temporarily unavailable — GBIF (the photo source) didn't respond. This isn't a data gap;
+              try reselecting the species in a moment.
+            </p>
+          )}
+
+          {selected && photos.isFetched && !photos.isError && (photos.data?.photos.length ?? 0) === 0 && (
             <p className="mb-4 text-xs text-ocean-500">
               {(photos.data?.total_with_photos ?? 0) > 0 ? (
                 <>

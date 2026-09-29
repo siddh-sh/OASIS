@@ -15,20 +15,23 @@ Coverage is genuinely partial: many species in the catalogue have no
 photographed occurrence in India at all. The response says how many were
 found rather than quietly returning an empty list.
 
-`photos` is restricted to sightings from the last RECENT_WINDOW_DAYS, filtered
-server-side via GBIF's own `eventDate` range parameter rather than by
-sampling an arbitrary page of results and checking dates client-side — the
-latter silently misses genuinely recent records for any heavily-photographed
-species (e.g. a common bird with thousands of matches, where an unsorted
-100-row sample can easily contain none of the last N days' uploads even
-though they exist). Showing a months- or years-old photo under a "recent
-sightings" heading is also misleading, so an empty window means an empty
-list, not a stale fallback — `total_with_photos` (a second, unfiltered
-lookup, made only when the windowed one comes back empty) tells the caller
-sightings exist even when none are recent, so the UI can say which is true.
-The 1-hour cache means a genuinely new upload surfaces here within the hour,
-not instantly, but this is a live GBIF query rather than an ingested
-snapshot, so it never gets more stale than that.
+`photos` is filtered to the last RECENT_WINDOW_DAYS first, via GBIF's own
+`eventDate` range parameter server-side rather than sampling an arbitrary
+page and checking dates client-side (the latter silently misses genuinely
+recent records for a heavily-photographed species — an unsorted 100-row
+sample of thousands of matches can easily contain none of the last N days'
+uploads even though they exist). But birds dominate GBIF's India photo
+coverage; for an actual marine species, even 60 days usually finds nothing —
+that's real data sparsity, not a bug, and it means "no photos" would be the
+answer for nearly every fish, crustacean or mollusc in the catalogue almost
+all the time, which is a worse experience than an accurately-labelled old
+photo. So when the window is empty but sightings exist at all, a second,
+unfiltered lookup returns the newest one(s) available regardless of age, and
+`photos_are_recent: false` tells the caller these aren't from the window, so
+the UI can be honest about how old they actually are instead of implying
+they're fresh. The 1-hour cache means a genuinely new upload surfaces here
+within the hour, not instantly, but this is a live GBIF query rather than an
+ingested snapshot, so it never gets more stale than that.
 """
 from __future__ import annotations
 
@@ -60,43 +63,10 @@ def _license_label(url: str | None) -> str | None:
     return f"CC {slug.split('/')[0].upper()}" if "/" in slug or slug else url
 
 
-def get_species_photos(
-    scientific_name: str, country: str = "IN", limit: int = 6
-) -> dict[str, Any]:
-    """Recent photographed occurrences of a species, with where they were seen."""
-    key = (scientific_name.lower(), country)
-    hit = _cache.get(key)
-    if hit and time.time() - hit[0] < CACHE_TTL:
-        return hit[1]
-
-    today = datetime.now(UTC).date()
-    window_start = today - timedelta(days=RECENT_WINDOW_DAYS)
-
-    try:
-        resp = requests.get(
-            GBIF_SEARCH,
-            params={
-                "scientificName": scientific_name,
-                "mediaType": "StillImage",
-                "country": country,
-                # Server-side recency filter — see module docstring for why
-                # this replaced sampling-then-checking-dates client-side.
-                "eventDate": f"{window_start.isoformat()},{today.isoformat()}",
-                "limit": max(limit, 50),
-            },
-            timeout=TIMEOUT,
-        )
-        resp.raise_for_status()
-        raw = resp.json()
-    except requests.RequestException as exc:
-        raise MediaUnavailable(f"GBIF request failed: {exc}") from exc
-
-    # Still no date-sort parameter on this endpoint — everything returned is
-    # already within the window, but not in date order, so sort what we got.
-    results = sorted(
-        raw.get("results", []), key=lambda occ: occ.get("eventDate") or "", reverse=True
-    )
-
+def _extract_photos(occurrences: list[dict], limit: int) -> list[dict]:
+    """Newest-first (still no date-sort param on this endpoint, so client-side)
+    list of photo dicts from a raw GBIF results list."""
+    results = sorted(occurrences, key=lambda occ: occ.get("eventDate") or "", reverse=True)
     photos = []
     for occ in results:
         if len(photos) >= limit:
@@ -121,30 +91,60 @@ def get_species_photos(
             "locality": occ.get("locality") or occ.get("stateProvince"),
             "gbif_occurrence_id": occ.get("key"),
         })
+    return photos
 
-    # `raw["count"]` above is scoped to the recency window. When nothing
-    # recent turned up, a second, unfiltered, limit=1 lookup (cheap — one
-    # result requested) gets the all-time count instead, purely so the UI can
-    # tell "nothing recent, but N exist historically" apart from "nothing has
-    # ever been photographed here." Skipped on the common path where the
-    # windowed query already found something, to avoid a second call.
+
+def _gbif_search(scientific_name: str, country: str, extra_params: dict) -> dict:
+    try:
+        resp = requests.get(
+            GBIF_SEARCH,
+            params={
+                "scientificName": scientific_name,
+                "mediaType": "StillImage",
+                "country": country,
+                **extra_params,
+            },
+            timeout=TIMEOUT,
+        )
+        resp.raise_for_status()
+        return resp.json()
+    except requests.RequestException as exc:
+        raise MediaUnavailable(f"GBIF request failed: {exc}") from exc
+
+
+def get_species_photos(
+    scientific_name: str, country: str = "IN", limit: int = 6
+) -> dict[str, Any]:
+    """Recent photographed occurrences of a species, with where they were seen."""
+    key = (scientific_name.lower(), country)
+    hit = _cache.get(key)
+    if hit and time.time() - hit[0] < CACHE_TTL:
+        return hit[1]
+
+    today = datetime.now(UTC).date()
+    window_start = today - timedelta(days=RECENT_WINDOW_DAYS)
+
+    # Server-side recency filter — see module docstring for why this replaced
+    # sampling-then-checking-dates client-side.
+    raw = _gbif_search(
+        scientific_name,
+        country,
+        {"eventDate": f"{window_start.isoformat()},{today.isoformat()}", "limit": max(limit, 50)},
+    )
+    photos = _extract_photos(raw.get("results", []), limit)
+    photos_are_recent = True
     total_with_photos = raw.get("count", 0)
+
+    # Nothing in the window. Rather than leave a real species with an empty
+    # gallery — the common case for marine species, where GBIF's India photo
+    # coverage is thin outside birds — fall back to the newest photo(s)
+    # available at all, however old, clearly flagged as not-recent so the UI
+    # never claims they're fresh.
     if not photos:
-        try:
-            resp2 = requests.get(
-                GBIF_SEARCH,
-                params={
-                    "scientificName": scientific_name,
-                    "mediaType": "StillImage",
-                    "country": country,
-                    "limit": 1,
-                },
-                timeout=TIMEOUT,
-            )
-            resp2.raise_for_status()
-            total_with_photos = resp2.json().get("count", 0)
-        except requests.RequestException:
-            pass  # best-effort — worst case the empty-state message undersells older coverage
+        raw_all = _gbif_search(scientific_name, country, {"limit": max(limit, 50)})
+        total_with_photos = raw_all.get("count", 0)
+        photos = _extract_photos(raw_all.get("results", []), limit)
+        photos_are_recent = False
 
     payload = {
         "scientific_name": scientific_name,
@@ -152,6 +152,7 @@ def get_species_photos(
         "total_with_photos": total_with_photos,
         "recent_window_days": RECENT_WINDOW_DAYS,
         "photos": photos,
+        "photos_are_recent": photos_are_recent,
         "source": "GBIF occurrence media (live). Photos are CC-licensed; attribution shown per image.",
     }
     _cache[key] = (time.time(), payload)

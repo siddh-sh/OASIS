@@ -8,7 +8,7 @@ from sqlalchemy import cast, func, select
 from sqlalchemy.orm import Session
 
 from app.agents.llm import LLMNotConfigured, llm_available
-from app.db.models import Region, Species, SpeciesOccurrence
+from app.db.models import Region, Species, SpeciesOccurrence, SpeciesVernacularName
 from app.db.session import get_db
 from app.schemas.common import BBox
 from app.schemas.species import (
@@ -23,10 +23,24 @@ from app.services.species_media import MediaUnavailable, get_species_photos
 router = APIRouter(prefix="/api/species", tags=["species"])
 
 
+def _non_ascii_count(name: str) -> int:
+    return sum(1 for ch in name if ord(ch) > 127)
+
+
+def _best_vernacular_name(candidates: list[tuple[str, str]]) -> tuple[str, str]:
+    """Several sources often list both a native-script and a romanised form
+    for the same language; the native-script one is what a reader of that
+    language actually recognises, so it wins."""
+    return max(candidates, key=lambda c: (_non_ascii_count(c[0]), -len(c[0])))
+
+
 @router.get("", response_model=SpeciesPage)
 def list_species(
     q: str | None = Query(default=None, description="substring match on scientific or common name"),
     kingdom: str | None = None,
+    language: str | None = Query(
+        default=None, description="attach each item's vernacular name in this language, where one exists"
+    ),
     limit: int = Query(default=100, ge=1, le=1000),
     offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
@@ -45,7 +59,29 @@ def list_species(
     rows = db.scalars(
         stmt.order_by(Species.common_name.is_(None), Species.scientific_name).limit(limit).offset(offset)
     ).all()
-    return SpeciesPage(items=[SpeciesOut.model_validate(r) for r in rows], total=total or 0, limit=limit, offset=offset)
+    items = [SpeciesOut.model_validate(r) for r in rows]
+
+    # One extra query for the whole page rather than one per row — the
+    # sidebar list renders up to 50 species at once, and a per-item lookup
+    # would mean 50 extra round trips just to populate it in the current
+    # language.
+    if language and items:
+        vernacular_rows = db.execute(
+            select(SpeciesVernacularName.species_id, SpeciesVernacularName.name)
+            .where(
+                SpeciesVernacularName.species_id.in_([i.species_id for i in items]),
+                SpeciesVernacularName.language_code == language,
+            )
+        ).all()
+        by_species: dict[int, list[tuple[str, str]]] = {}
+        for species_id, name in vernacular_rows:
+            by_species.setdefault(species_id, []).append((name, ""))
+        for item in items:
+            candidates = by_species.get(item.species_id)
+            if candidates:
+                item.vernacular_name = _best_vernacular_name(candidates)[0]
+
+    return SpeciesPage(items=items, total=total or 0, limit=limit, offset=offset)
 
 
 @router.get("/occurrences", response_model=SpeciesOccurrencesPage)
@@ -102,6 +138,46 @@ def species_photos(species_id: int, limit: int = Query(default=6, ge=1, le=20), 
         return get_species_photos(species.scientific_name, limit=limit)
     except MediaUnavailable as exc:
         raise HTTPException(503, str(exc)) from exc
+
+
+@router.get("/{species_id}/vernacular-names")
+def species_vernacular_names(species_id: int, db: Session = Depends(get_db)):
+    """Regional-language common names, one per language available.
+
+    Sourced from FishBase/SeaLifeBase/Wikidata by
+    `data-pipeline/cleaning/load_vernacular_names.py` — never machine-
+    translated from the English common_name, which would produce a generic
+    translated phrase rather than the term actually used locally (see that
+    script's docstring). Coverage is genuinely partial and skewed toward
+    well-known finfish; a language missing here means no source had a name
+    for this species in it, not an oversight.
+
+    Where a species/language pair has several recorded spellings, the one
+    with the most non-Latin-script characters is preferred — several sources
+    list both a native-script and a romanised form, and the native-script
+    one is what a reader of that language actually recognises.
+    """
+    species = db.get(Species, species_id)
+    if species is None:
+        raise HTTPException(404, f"no species with id={species_id}")
+
+    rows = db.execute(
+        select(SpeciesVernacularName.language_code, SpeciesVernacularName.name, SpeciesVernacularName.source)
+        # "_none" is the loader's sentinel for "checked, nothing found" (see
+        # load_vernacular_names.py) — real data only.
+        .where(SpeciesVernacularName.species_id == species_id, SpeciesVernacularName.language_code != "_none")
+    ).all()
+
+    by_language: dict[str, list[tuple[str, str]]] = {}
+    for language_code, name, source in rows:
+        by_language.setdefault(language_code, []).append((name, source))
+
+    names = {}
+    for language_code, candidates in by_language.items():
+        best_name, best_source = _best_vernacular_name(candidates)
+        names[language_code] = {"name": best_name, "source": best_source}
+
+    return {"names": names}
 
 
 @router.get("/{species_id}/regions")

@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next'
 import { KPITile } from '@/components/KPITile'
 import { MapView, type StationKind } from '@/components/MapView'
 import { useFisheriesSummary } from '@/hooks/useFisheriesData'
@@ -7,6 +8,7 @@ import { useSpeciesList } from '@/hooks/useSpeciesData'
 import { useWeatherObservations } from '@/hooks/useWeatherData'
 
 export function DashboardPage() {
+  const { t } = useTranslation()
   const stations = useOceanStations({ limit: 500 })
   const sstSummary = useOceanReadingsSummary('sst')
   const species = useSpeciesList({ limit: 1 })
@@ -20,8 +22,8 @@ export function DashboardPage() {
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h1 className="text-xl font-semibold text-ocean-950 dark:text-ocean-50">Dashboard</h1>
-        <p className="text-sm text-ocean-500">Overview across all six data domains</p>
+        <h1 className="text-xl font-semibold text-ocean-950 dark:text-ocean-50">{t('pages.dashboard.title')}</h1>
+        <p className="text-sm text-ocean-500">{t('pages.dashboard.subtitle')}</p>
       </div>
 
       <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-6">

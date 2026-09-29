@@ -17,6 +17,10 @@ class SpeciesOut(BaseModel):
     genus: str | None
     species_epithet: str | None
     iucn_status: str | None
+    # Only populated when the request carries `?language=`; see
+    # list_species — never machine-translated, see
+    # data-pipeline/cleaning/load_vernacular_names.py.
+    vernacular_name: str | None = None
 
 
 class SpeciesPage(BaseModel):

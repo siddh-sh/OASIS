@@ -9,6 +9,7 @@ from app.api import (
     fisheries,
     molecular,
     ocean,
+    regions,
     species,
     weather,
 )
@@ -37,6 +38,7 @@ app.include_router(auth.router)
 app.include_router(ocean.router)
 app.include_router(weather.router)
 app.include_router(species.router)
+app.include_router(regions.router)
 app.include_router(fisheries.router)
 app.include_router(molecular.router)
 app.include_router(analytics.router)

@@ -36,5 +36,10 @@ fastembed==0.8.0
 # Correlation Studio (Phase 6) — Pearson/Spearman with p-values.
 scipy==1.17.1
 
+# One-off vernacular-name sourcing (data-pipeline/cleaning/load_vernacular_names.py)
+# — parses FishBase/SeaLifeBase common-name tables, which have no JSON API.
+beautifulsoup4==4.15.0
+lxml==5.3.0
+
 pytest==8.2.0
 pytest-asyncio==0.23.6

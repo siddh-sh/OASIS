@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { DataSourceBadge } from '@/components/DataSourceBadge'
 import { FilterField, FilterSidebar } from '@/components/FilterSidebar'
 import { LoadingRows } from '@/components/LoadingSkeleton'
@@ -8,6 +9,7 @@ import { useOceanReadings, useOceanStations } from '@/hooks/useOceanData'
 import type { StationType } from '@/types/api'
 
 export function OceanExplorerPage() {
+  const { t } = useTranslation()
   const [stationType, setStationType] = useState<StationType | ''>('')
   const [selectedStation, setSelectedStation] = useState<number>()
 
@@ -25,10 +27,8 @@ export function OceanExplorerPage() {
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h1 className="text-xl font-semibold text-ocean-950 dark:text-ocean-50">Ocean & Satellite Explorer</h1>
-        <p className="text-sm text-ocean-500">
-          Satellite SST/chlorophyll grid + in-situ RAMA buoys — click a station for its time series.
-        </p>
+        <h1 className="text-xl font-semibold text-ocean-950 dark:text-ocean-50">{t('pages.ocean.title')}</h1>
+        <p className="text-sm text-ocean-500">{t('pages.ocean.subtitle')}</p>
       </div>
 
       <div className="flex gap-6">

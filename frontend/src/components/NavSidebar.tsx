@@ -1,25 +1,28 @@
 import clsx from 'clsx'
+import { useTranslation } from 'react-i18next'
 import { NavLink } from 'react-router-dom'
 
 const LINKS = [
-  { to: '/dashboard', label: 'Dashboard' },
-  { to: '/ocean', label: 'Ocean & Satellite' },
-  { to: '/weather', label: 'Weather' },
-  { to: '/species', label: 'Species / Biodiversity' },
-  { to: '/fisheries', label: 'Fisheries' },
-  { to: '/molecular', label: 'Molecular / eDNA' },
-  { to: '/correlation', label: 'Correlation Studio' },
-  { to: '/alerts', label: 'Risk & Anomaly Alerts' },
-  { to: '/chat', label: 'NL Chatbot' },
-  { to: '/admin', label: 'Admin / Data Status' },
-]
+  { to: '/dashboard', key: 'dashboard' },
+  { to: '/ocean', key: 'ocean' },
+  { to: '/weather', key: 'weather' },
+  { to: '/species', key: 'species' },
+  { to: '/fisheries', key: 'fisheries' },
+  { to: '/molecular', key: 'molecular' },
+  { to: '/correlation', key: 'correlation' },
+  { to: '/alerts', key: 'alerts' },
+  { to: '/chat', key: 'chatbot' },
+  { to: '/admin', key: 'admin' },
+] as const
 
 export function NavSidebar() {
+  const { t } = useTranslation()
+
   return (
     <nav className="flex h-full w-56 shrink-0 flex-col gap-1 border-r border-ocean-200 bg-ocean-50 p-3 dark:border-ocean-800 dark:bg-ocean-950">
       <div className="mb-4 px-2 py-1">
-        <span className="text-lg font-semibold text-ocean-900 dark:text-ocean-50">OASIS</span>
-        <p className="text-xs text-ocean-500">Marine data platform</p>
+        <span className="text-lg font-semibold text-ocean-900 dark:text-ocean-50">{t('nav.appName')}</span>
+        <p className="text-xs text-ocean-500">{t('nav.tagline')}</p>
       </div>
       {LINKS.map((link) => (
         <NavLink
@@ -34,7 +37,7 @@ export function NavSidebar() {
             )
           }
         >
-          {link.label}
+          {t(`nav.${link.key}`)}
         </NavLink>
       ))}
     </nav>

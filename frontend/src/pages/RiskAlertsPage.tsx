@@ -1,9 +1,11 @@
 import { useQuery } from '@tanstack/react-query'
+import { useTranslation } from 'react-i18next'
 import { AnomalyBadge } from '@/components/AnomalyBadge'
 import { analyticsApi } from '@/api/analytics'
 import { ApiError } from '@/api/client'
 
 export function RiskAlertsPage() {
+  const { t } = useTranslation()
   const anomalies = useQuery({
     queryKey: ['analytics', 'anomalies'],
     queryFn: () => analyticsApi.anomalies(),
@@ -15,10 +17,8 @@ export function RiskAlertsPage() {
   return (
     <div className="flex flex-col gap-4">
       <div>
-        <h1 className="text-xl font-semibold text-ocean-950 dark:text-ocean-50">Risk & Anomaly Alerts</h1>
-        <p className="text-sm text-ocean-500">
-          Marine heatwave / HAB-like chlorophyll spike / biodiversity-decline events, rolling z-score vs. climatology.
-        </p>
+        <h1 className="text-xl font-semibold text-ocean-950 dark:text-ocean-50">{t('pages.alerts.title')}</h1>
+        <p className="text-sm text-ocean-500">{t('pages.alerts.subtitle')}</p>
       </div>
 
       <div className="flex gap-2 text-xs">

@@ -1,9 +1,11 @@
+import { useTranslation } from 'react-i18next'
 import { DataSourceBadge } from '@/components/DataSourceBadge'
 import { ApiError } from '@/api/client'
 import { useAuth } from '@/hooks/useAuth'
 import { useDatasetsStatus } from '@/hooks/useAdminData'
 
 export function AdminPage() {
+  const { t } = useTranslation()
   const { profile } = useAuth()
   const status = useDatasetsStatus()
   const forbidden = status.error instanceof ApiError && [401, 403].includes(status.error.status)
@@ -11,8 +13,8 @@ export function AdminPage() {
   return (
     <div className="flex flex-col gap-4">
       <div>
-        <h1 className="text-xl font-semibold text-ocean-950 dark:text-ocean-50">Admin / Data Status</h1>
-        <p className="text-sm text-ocean-500">Dataset sync status, licenses, and Cleaning Agent notes.</p>
+        <h1 className="text-xl font-semibold text-ocean-950 dark:text-ocean-50">{t('pages.admin.title')}</h1>
+        <p className="text-sm text-ocean-500">{t('pages.admin.subtitle')}</p>
       </div>
 
       {profile && profile.role !== 'admin' ? (

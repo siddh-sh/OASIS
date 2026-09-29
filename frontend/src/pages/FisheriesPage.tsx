@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import { useTranslation } from 'react-i18next'
 import {
   Area,
   AreaChart,
@@ -22,6 +23,7 @@ const COLORS = ['#0e7490', '#b45309', '#7c3aed', '#15803d', '#be123c', '#0369a1'
 const OTHER_COLOR = '#94a3b8'
 
 export function FisheriesPage() {
+  const { t } = useTranslation()
   const [groupBy, setGroupBy] = useState<GroupBy>('species')
   const [regionId, setRegionId] = useState<number>()
   const [speciesId, setSpeciesId] = useState<number>()
@@ -54,10 +56,8 @@ export function FisheriesPage() {
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h1 className="text-xl font-semibold text-ocean-950 dark:text-ocean-50">Fisheries Insights</h1>
-        <p className="text-sm text-ocean-500">
-          Sea Around Us reconstructed catch, 1950–2019, broken down by species and EEZ.
-        </p>
+        <h1 className="text-xl font-semibold text-ocean-950 dark:text-ocean-50">{t('pages.fisheries.title')}</h1>
+        <p className="text-sm text-ocean-500">{t('pages.fisheries.subtitle')}</p>
       </div>
 
       <div className="flex flex-wrap items-end gap-3">

@@ -1,6 +1,11 @@
 requests>=2.32
 pandas>=2.2
 
+# Needed by cleaning/load_vernacular_names.py, which parses FishBase/
+# SeaLifeBase common-name pages (no JSON API for this exists).
+beautifulsoup4>=4.15
+lxml>=5.3
+
 # Needed by cleaning/load_seeds.py and backend/db/apply_schema.py, which the
 # README's setup sequence runs straight after installing this file. Pinned to
 # match backend/requirements.txt so the two never diverge.

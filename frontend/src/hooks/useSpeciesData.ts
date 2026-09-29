@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { speciesApi } from '@/api/species'
 
-export function useSpeciesList(params: { q?: string; kingdom?: string; limit?: number } = {}) {
+export function useSpeciesList(params: { q?: string; kingdom?: string; language?: string; limit?: number } = {}) {
   return useQuery({
     queryKey: ['species', 'list', params],
     queryFn: () => speciesApi.list(params),

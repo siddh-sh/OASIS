@@ -71,13 +71,20 @@ export function showsTechnicalDetail(mode: ViewMode): boolean {
  * most records the common name simply does not exist. Rather than invent one
  * or show an empty label, the scientific name is used and flagged as such —
  * a Fisherman view that silently showed Latin would be worse than one that
- * admits the gap.
+ * admits the gap. Same logic extends to `vernacularName` — a regional-
+ * language name sourced from FishBase/SeaLifeBase/Wikidata (see
+ * data-pipeline/cleaning/load_vernacular_names.py), never a machine
+ * translation of `commonName`, and just as often simply absent.
  */
 export function speciesLabel(
   mode: ViewMode,
   scientificName: string,
   commonName: string | null | undefined,
+  vernacularName?: string | null,
 ): { primary: string; secondary: string | null; primaryIsScientific: boolean } {
+  if (prefersCommonName(mode) && vernacularName) {
+    return { primary: vernacularName, secondary: commonName ?? scientificName, primaryIsScientific: false }
+  }
   if (prefersCommonName(mode) && commonName) {
     return { primary: commonName, secondary: scientificName, primaryIsScientific: false }
   }

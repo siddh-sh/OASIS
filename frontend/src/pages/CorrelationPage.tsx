@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import { useTranslation } from 'react-i18next'
 import {
   CartesianGrid,
   ResponsiveContainer,
@@ -12,6 +13,7 @@ import {
 import { analyticsApi } from '@/api/analytics'
 
 export function CorrelationPage() {
+  const { t } = useTranslation()
   const [var1, setVar1] = useState('sst')
   const [var2, setVar2] = useState('chlorophyll_a')
 
@@ -32,10 +34,10 @@ export function CorrelationPage() {
   return (
     <div className="flex flex-col gap-4">
       <div>
-        <h1 className="text-xl font-semibold text-ocean-950 dark:text-ocean-50">Correlation Studio</h1>
+        <h1 className="text-xl font-semibold text-ocean-950 dark:text-ocean-50">{t('pages.correlation.title')}</h1>
         <p className="text-sm text-ocean-500">
-          Cross-domain correlation on a shared monthly grain — satellite and weather series resampled to
-          monthly means and joined on month.
+          {t('pages.correlation.subtitle')} Satellite and weather series resampled to monthly means and joined on
+          month.
         </p>
       </div>
 

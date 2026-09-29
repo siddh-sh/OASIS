@@ -134,6 +134,23 @@ class Species(Base):
     iucn_status: Mapped[str | None] = mapped_column(Text)
 
 
+class SpeciesVernacularName(Base):
+    """Regional-language common names, sourced from FishBase/SeaLifeBase/
+    Wikidata — not machine-translated. See alembic/versions/0005 for why."""
+
+    __tablename__ = "species_vernacular_names"
+    __table_args__ = (
+        UniqueConstraint("species_id", "language_code", "name", "source"),
+        Index("idx_vernacular_species_lang", "species_id", "language_code"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    species_id: Mapped[int] = mapped_column(ForeignKey("species.species_id"), nullable=False)
+    language_code: Mapped[str] = mapped_column(Text, nullable=False)
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    source: Mapped[str] = mapped_column(Text, nullable=False)
+
+
 class SpeciesOccurrence(Base):
     __tablename__ = "species_occurrences"
     __table_args__ = (

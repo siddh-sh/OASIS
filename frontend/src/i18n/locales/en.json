@@ -1,0 +1,74 @@
+{
+  "nav": {
+    "appName": "OASIS",
+    "tagline": "Marine data platform",
+    "dashboard": "Dashboard",
+    "ocean": "Ocean & Satellite",
+    "weather": "Weather",
+    "species": "Species / Biodiversity",
+    "fisheries": "Fisheries",
+    "molecular": "Molecular / eDNA",
+    "correlation": "Correlation Studio",
+    "alerts": "Risk & Anomaly Alerts",
+    "chatbot": "NL Chatbot",
+    "admin": "Admin / Data Status"
+  },
+  "header": {
+    "viewingAs": "Viewing as",
+    "settings": "Settings",
+    "logOut": "Log out",
+    "notSignedIn": "Not signed in",
+    "language": "Language"
+  },
+  "login": {
+    "tagline": "Unified oceanographic, fisheries & biodiversity intelligence",
+    "loginTab": "Login",
+    "signupTab": "Signup",
+    "fullName": "Full name",
+    "institution": "Institution (optional)",
+    "email": "Email",
+    "password": "Password",
+    "working": "Working…",
+    "logInButton": "Log in",
+    "signUpButton": "Sign up"
+  },
+  "pages": {
+    "dashboard": { "title": "Dashboard", "subtitle": "Overview across all six data domains" },
+    "ocean": {
+      "title": "Ocean & Satellite Explorer",
+      "subtitle": "Satellite SST/chlorophyll grid + in-situ RAMA buoys — click a station for its time series."
+    },
+    "weather": {
+      "title": "Weather",
+      "subtitle": "Live forecast from Open-Meteo, plus the ERA5 historical record held in the database."
+    },
+    "species": {
+      "title": "Species / Biodiversity Explorer",
+      "subtitle": "Deduplicated across OBIS, GBIF, BOLD and Sea Around Us by binomial scientific name."
+    },
+    "fisheries": {
+      "title": "Fisheries Insights",
+      "subtitle": "Sea Around Us reconstructed catch, 1950–2019, broken down by species and EEZ."
+    },
+    "molecular": {
+      "title": "Molecular — DNA barcode reference library",
+      "subtitle": "1,993 DNA barcodes from BOLD Systems, collected in India."
+    },
+    "correlation": {
+      "title": "Correlation Studio",
+      "subtitle": "Cross-domain correlation on a shared monthly grain."
+    },
+    "alerts": {
+      "title": "Risk & Anomaly Alerts",
+      "subtitle": "Marine heatwave / HAB-like chlorophyll spike / biodiversity-decline events, rolling z-score vs. climatology."
+    },
+    "chatbot": {
+      "title": "NL Chatbot",
+      "subtitle": "Ask data questions; the coordinator invokes the agent pipeline as tools."
+    },
+    "admin": {
+      "title": "Admin / Data Status",
+      "subtitle": "Dataset sync status, licenses, and Cleaning Agent notes."
+    }
+  }
+}

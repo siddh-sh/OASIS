@@ -2,7 +2,7 @@ import { apiFetch, toQuery } from '@/api/client'
 import type { Page, Species, SpeciesOccurrence } from '@/types/api'
 
 export const speciesApi = {
-  list: (params: { q?: string; kingdom?: string; limit?: number; offset?: number } = {}) =>
+  list: (params: { q?: string; kingdom?: string; language?: string; limit?: number; offset?: number } = {}) =>
     apiFetch<Page<Species>>(`/api/species${toQuery(params)}`),
 
   get: (speciesId: number) => apiFetch<Species>(`/api/species/${speciesId}`),
@@ -28,6 +28,7 @@ export interface SpeciesPhotos {
   total_with_photos: number
   recent_window_days: number
   photos: SpeciesPhoto[]
+  photos_are_recent: boolean
   source: string
 }
 
@@ -48,8 +49,15 @@ export interface SpeciesRegion {
   polygon: [number, number][]
 }
 
+export interface VernacularNameEntry {
+  name: string
+  source: string
+}
+
 export const speciesExtrasApi = {
   photos: (speciesId: number) => apiFetch<SpeciesPhotos>(`/api/species/${speciesId}/photos?limit=6`),
   context: (speciesId: number) => apiFetch<SpeciesContext>(`/api/species/${speciesId}/context`),
   regions: (speciesId: number) => apiFetch<{ regions: SpeciesRegion[] }>(`/api/species/${speciesId}/regions`),
+  vernacularNames: (speciesId: number) =>
+    apiFetch<{ names: Record<string, VernacularNameEntry> }>(`/api/species/${speciesId}/vernacular-names`),
 }

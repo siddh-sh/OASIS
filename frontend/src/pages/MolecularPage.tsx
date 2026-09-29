@@ -1,10 +1,12 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { DataSourceBadge } from '@/components/DataSourceBadge'
 import { LoadingRows } from '@/components/LoadingSkeleton'
 import { molecularApi, type SequenceMatchResult } from '@/api/molecular'
 import { useMolecularRecords } from '@/hooks/useMolecularData'
 
 export function MolecularPage() {
+  const { t } = useTranslation()
   const records = useMolecularRecords({ limit: 50 })
   const [sequence, setSequence] = useState('')
   const [result, setResult] = useState<SequenceMatchResult>()
@@ -28,12 +30,9 @@ export function MolecularPage() {
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h1 className="text-xl font-semibold text-ocean-950 dark:text-ocean-50">
-          Molecular — DNA barcode reference library
-        </h1>
+        <h1 className="text-xl font-semibold text-ocean-950 dark:text-ocean-50">{t('pages.molecular.title')}</h1>
         <p className="text-sm text-ocean-500">
-          1,993 DNA barcodes from BOLD Systems, collected in India. This is the reference library you match
-          unknown sequences against.
+          {t('pages.molecular.subtitle')} This is the reference library you match unknown sequences against.
         </p>
       </div>
 

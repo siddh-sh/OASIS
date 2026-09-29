@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import { useTranslation } from 'react-i18next'
 import { LoadingRows } from '@/components/LoadingSkeleton'
 import { MapView } from '@/components/MapView'
 import { TimeSeriesChart } from '@/components/TimeSeriesChart'
@@ -24,6 +25,7 @@ const dayName = (iso: string) =>
   new Date(iso).toLocaleDateString(undefined, { weekday: 'short' })
 
 export function WeatherExplorerPage() {
+  const { t } = useTranslation()
   // §3a: all coastal states are shown by default; Kerala, Goa & Odisha are
   // the platform's priority states and stay one click away via the checkbox.
   const [priorityOnly, setPriorityOnly] = useState(false)
@@ -60,10 +62,8 @@ export function WeatherExplorerPage() {
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h1 className="text-xl font-semibold text-ocean-950 dark:text-ocean-50">Weather</h1>
-        <p className="text-sm text-ocean-500">
-          Live forecast from Open-Meteo, plus the ERA5 historical record held in the database.
-        </p>
+        <h1 className="text-xl font-semibold text-ocean-950 dark:text-ocean-50">{t('pages.weather.title')}</h1>
+        <p className="text-sm text-ocean-500">{t('pages.weather.subtitle')}</p>
       </div>
 
       <div className="flex flex-wrap items-end gap-3">

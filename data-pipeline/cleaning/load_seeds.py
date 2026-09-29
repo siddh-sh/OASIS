@@ -467,6 +467,12 @@ def record_metadata(cur):
         # Simplified state boundaries only (see load_region_boundaries) --
         # illustrative, not surveyed cartography.
         ("GADM-derived (geohacker/india)", "boundaries", "free for academic/non-commercial use"),
+        # Regional-language species names (see
+        # data-pipeline/cleaning/load_vernacular_names.py) -- run separately
+        # from this script since it scrapes live pages over several minutes.
+        ("FishBase", "vernacular-names", "free for non-commercial research use"),
+        ("SeaLifeBase", "vernacular-names", "free for non-commercial research use"),
+        ("Wikidata", "vernacular-names", "CC0"),
     ]
     execute_values(cur,
                    "insert into datasets_metadata (source_name, dataset_type, license, "
