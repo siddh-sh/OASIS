@@ -251,6 +251,14 @@ def recommendation(
         payload = recommend(db, prediction_or_anomaly_id, refresh=refresh)
     except LLMNotConfigured as exc:
         raise HTTPException(503, str(exc)) from exc
+    except Exception as exc:  # noqa: BLE001
+        # A key being present (llm_available(), above) doesn't mean the
+        # configured model is actually valid — e.g. LLM_MODEL pointing at a
+        # since-deprecated model name fails here, not at the "is a key set"
+        # check. Surfaced as a clean 503 rather than a raw 500, same reasoning
+        # as the chatbot's own fallback for the identical failure mode (see
+        # nl_chatbot_coordinator._fallback_answer).
+        raise HTTPException(503, f"LLM call failed: {exc}") from exc
     if payload is None:
         raise HTTPException(
             404, f"no ml_prediction or anomaly_event with id={prediction_or_anomaly_id}"

@@ -10,6 +10,15 @@ from app.db.session import get_db
 router = APIRouter(prefix="/api/regions", tags=["regions"])
 
 
+@router.get("")
+def list_regions(db: Session = Depends(get_db)):
+    """All 12 regions (9 coastal states + 2 EEZ zones + open ocean) — just
+    id/name/state, for UI lookups like labelling a station's region_id
+    without a second round trip per station."""
+    rows = db.execute(select(Region.region_id, Region.name, Region.state).order_by(Region.region_id)).all()
+    return [{"region_id": r.region_id, "name": r.name, "state": r.state} for r in rows]
+
+
 @router.get("/locate")
 def locate(
     lat: float = Query(..., ge=-90, le=90),

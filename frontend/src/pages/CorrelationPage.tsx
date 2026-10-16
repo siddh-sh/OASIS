@@ -111,6 +111,64 @@ export function CorrelationPage() {
             </div>
           )}
 
+          {/* Plain-language read of the stats above, computed from this
+              specific result (not fixed text) — "Pearson r = -0.622" means
+              nothing to most readers without translation. */}
+          {data.pearson_r !== null && (
+            (() => {
+              const r = data.pearson_r
+              const xLabel = data.var1_label ?? data.var1
+              const yLabel = data.var2_label ?? data.var2
+              const direction =
+                r > 0
+                  ? `tend to rise together — as ${xLabel} goes up, ${yLabel} tends to go up too`
+                  : `move in opposite directions — as ${xLabel} goes up, ${yLabel} tends to go down`
+              const abs = Math.abs(r)
+              const strength =
+                abs >= 0.8
+                  ? 'a very strong'
+                  : abs >= 0.6
+                    ? 'a fairly strong'
+                    : abs >= 0.4
+                      ? 'a moderate'
+                      : abs >= 0.2
+                        ? 'a weak'
+                        : 'almost no'
+              return (
+                <div className="rounded-lg border border-ocean-200 p-4 text-sm dark:border-ocean-800">
+                  <h2 className="mb-2 font-semibold text-ocean-700 dark:text-ocean-200">
+                    What this means in plain words
+                  </h2>
+                  <ul className="flex list-disc flex-col gap-1.5 pl-4 text-ocean-600 dark:text-ocean-300">
+                    <li>
+                      <strong>{xLabel}</strong> and <strong>{yLabel}</strong> {direction}. That&rsquo;s{' '}
+                      <strong>{strength} relationship</strong> (correlation of {r.toFixed(2)}, where 0 means no
+                      relationship at all and ±1 would mean they move perfectly together).
+                    </li>
+                    <li>
+                      {data.significant ? (
+                        <>
+                          This pattern is <strong>statistically significant</strong> (p = {data.p_value?.toExponential(1)}
+                          ) — unlikely to just be random noise, given {data.n_months} months of data.
+                        </>
+                      ) : (
+                        <>
+                          This pattern is <strong>not statistically significant</strong> — with only{' '}
+                          {data.n_months} months of overlapping data, it could plausibly just be random noise rather
+                          than a real relationship.
+                        </>
+                      )}
+                    </li>
+                    <li>
+                      <strong>Correlation isn&rsquo;t causation</strong> — this says the two move together, not that
+                      one causes the other. Both could be driven by something else entirely (like the seasons).
+                    </li>
+                  </ul>
+                </div>
+              )
+            })()
+          )}
+
           {/* The backend ships caveats with every result; showing the number
               without them would overstate what ~25 monthly points support. */}
           {data.notes?.length > 0 && (

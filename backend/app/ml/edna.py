@@ -30,11 +30,22 @@ Implementation notes tied to the real data:
     has a run of 184). Non-ACGT characters are skipped rather than treated as
     a fifth base, so a gappy record is compared on the bases it does have.
   * Records shorter than one k-mer, or empty after cleaning, are excluded.
+  * `search()` uses a separate, dense-array path (`_kmer_array`,
+    `_REFERENCE_CACHE`) rather than the Counter-based `kmer_vector`/`cosine`
+    below (kept exactly as they were — they're directly unit-tested). k=5
+    over {A,C,G,T} has exactly 1,024 possible k-mers, small and fixed enough
+    to give every sequence a dense vector and score the whole reference
+    library against a query as one matrix-vector multiply. The original
+    per-record Counter comparison, even with the Counters themselves cached
+    between requests, still measured ~3s for the longest sequence in the
+    library against ~2,000 records — fine computationally, but reads as
+    "stuck" to a visitor who just clicked a button.
 """
 from __future__ import annotations
 
 import re
 from collections import Counter
+from itertools import product
 
 import numpy as np
 from sqlalchemy import select
@@ -45,6 +56,12 @@ from app.db.models import MolecularRecord, Species
 K = 5
 VALID = re.compile(r"[^ACGT]")
 MIN_QUERY_LEN = 20
+
+_KMER_VOCAB = ["".join(p) for p in product("ACGT", repeat=K)]
+_KMER_INDEX = {kmer: i for i, kmer in enumerate(_KMER_VOCAB)}
+
+# marker_gene filter -> (matrix[n_records, 1024], norms[n_records], metadata list)
+_REFERENCE_CACHE: dict[str | None, tuple[np.ndarray, np.ndarray, list[tuple]]] = {}
 
 
 def clean_sequence(sequence: str) -> str:
@@ -69,15 +86,22 @@ def cosine(a: Counter, b: Counter) -> float:
     return float(dot / (na * nb)) if na and nb else 0.0
 
 
-def search(db: Session, sequence: str, limit: int = 10, marker_gene: str | None = None) -> dict:
-    query = clean_sequence(sequence)
-    if len(query) < MIN_QUERY_LEN:
-        raise ValueError(
-            f"sequence too short after cleaning ({len(query)} valid bases); "
-            f"need at least {MIN_QUERY_LEN} A/C/G/T characters"
-        )
+def _kmer_array(sequence: str, k: int = K) -> np.ndarray:
+    """Same counts as `kmer_vector`, as a dense length-1,024 array indexed by
+    `_KMER_INDEX` instead of a Counter — built for bulk numpy comparison,
+    not for the unit tests (which exercise `kmer_vector`/`cosine` directly)."""
+    vec = np.zeros(len(_KMER_VOCAB), dtype=np.float32)
+    for i in range(len(sequence) - k + 1):
+        idx = _KMER_INDEX.get(sequence[i : i + k])
+        if idx is not None:
+            vec[idx] += 1
+    return vec
 
-    query_vec = kmer_vector(query)
+
+def _reference_matrix(db: Session, marker_gene: str | None) -> tuple[np.ndarray, np.ndarray, list[tuple]]:
+    cached = _REFERENCE_CACHE.get(marker_gene)
+    if cached is not None:
+        return cached
 
     stmt = select(
         MolecularRecord.id, MolecularRecord.process_id, MolecularRecord.barcode_sequence,
@@ -86,16 +110,51 @@ def search(db: Session, sequence: str, limit: int = 10, marker_gene: str | None 
     if marker_gene:
         stmt = stmt.where(MolecularRecord.marker_gene == marker_gene)
 
-    scored = []
+    vectors = []
+    metadata: list[tuple] = []
     for rec_id, process_id, seq, marker, species_id, bin_uri in db.execute(stmt).all():
         subject = clean_sequence(seq or "")
         if len(subject) < K:
             continue
-        score = cosine(query_vec, kmer_vector(subject))
-        if score > 0:
-            scored.append((score, rec_id, process_id, marker, species_id, bin_uri, len(subject)))
+        vectors.append(_kmer_array(subject))
+        metadata.append((rec_id, process_id, marker, species_id, bin_uri, len(subject)))
 
-    scored.sort(reverse=True, key=lambda t: t[0])
+    matrix = np.stack(vectors) if vectors else np.zeros((0, len(_KMER_VOCAB)), dtype=np.float32)
+    norms = np.linalg.norm(matrix, axis=1)
+    result = (matrix, norms, metadata)
+    _REFERENCE_CACHE[marker_gene] = result
+    return result
+
+
+def search(db: Session, sequence: str, limit: int = 10, marker_gene: str | None = None) -> dict:
+    query = clean_sequence(sequence)
+    if len(query) < MIN_QUERY_LEN:
+        raise ValueError(
+            f"sequence too short after cleaning ({len(query)} valid bases); "
+            f"need at least {MIN_QUERY_LEN} A/C/G/T characters"
+        )
+
+    query_vec = _kmer_array(query)
+    query_norm = float(np.linalg.norm(query_vec))
+
+    matrix, norms, metadata = _reference_matrix(db, marker_gene)
+
+    if matrix.shape[0] == 0 or query_norm == 0:
+        scores = np.zeros(matrix.shape[0], dtype=np.float32)
+    else:
+        # One BLAS matvec against the whole reference library instead of a
+        # Python-level loop — this is the actual fix for the multi-second
+        # "stuck" search, not just caching (see module docstring).
+        denom = norms * query_norm
+        with np.errstate(divide="ignore", invalid="ignore"):
+            scores = np.where(denom > 0, (matrix @ query_vec) / denom, 0.0)
+
+    order = np.argsort(-scores)
+    scored = [
+        (float(scores[i]), *metadata[i])
+        for i in order
+        if scores[i] > 0
+    ]
     top = scored[:limit]
 
     names = {}

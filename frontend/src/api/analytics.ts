@@ -1,7 +1,5 @@
 import { apiFetch, toQuery } from '@/api/client'
 
-// These mirror app/schemas shapes Phase 4/5 will introduce — kept minimal
-// here since the endpoints themselves are still 501 stubs (backend/app/api/analytics.py).
 export interface AnomalyEvent {
   id: number
   domain: string
@@ -22,6 +20,57 @@ export interface Recommendation {
   anomaly_event_id: number | null
   narrative: string
   created_at: string
+  cached: boolean
+}
+
+export interface ModelSkill {
+  rmse: number
+  baseline_rmse: number
+  skill_vs_persistence: number
+  n_test: number
+  note: string
+}
+
+export interface FeatureContribution {
+  feature: string
+  contribution: number
+  direction: string
+}
+
+export interface CatchPrediction {
+  prediction_id: number
+  species_id: number
+  region_id: number
+  year: number
+  predicted_tonnes: number
+  last_observed_tonnes: number
+  skill: ModelSkill
+  top_features: FeatureContribution[]
+}
+
+export interface ForecastPoint {
+  timestamp: string
+  predicted_value: number
+  step: number
+}
+
+export interface OceanForecast {
+  station_id: number
+  variable: string
+  horizon: number
+  step_days: number
+  points: ForecastPoint[]
+  skill: ModelSkill
+}
+
+export interface CatchDecline {
+  species_id: number
+  scientific_name: string | null
+  common_name: string | null
+  slope_tonnes_per_year: number
+  pct_per_year: number
+  n_years: number
+  window_end_year: string | null
 }
 
 export interface CorrelationVariable {
@@ -57,4 +106,16 @@ export const analyticsApi = {
 
   correlation: (params: { var1: string; var2: string; region?: string }) =>
     apiFetch<CorrelationResult>(`/api/analytics/correlation${toQuery(params)}`),
+
+  predictCatch: (params: { species_id: number; region_id?: number }) =>
+    apiFetch<CatchPrediction>(`/api/analytics/predict/catch${toQuery(params)}`),
+
+  forecastOcean: (params: { station_id: number; variable: string; horizon?: number }) =>
+    apiFetch<OceanForecast>(`/api/analytics/forecast/ocean-conditions${toQuery(params)}`),
+
+  catchDecline: (limit = 20) =>
+    apiFetch<CatchDecline[]>(`/api/analytics/anomalies/catch-decline${toQuery({ limit })}`),
+
+  recommendation: (targetId: number, refresh = false) =>
+    apiFetch<Recommendation>(`/api/analytics/recommendation/${targetId}${toQuery({ refresh })}`),
 }

@@ -1,5 +1,11 @@
 import { DivIcon, type LatLngBoundsExpression } from 'leaflet'
 import 'leaflet/dist/leaflet.css'
+// Styles the cluster bubbles react-leaflet-cluster renders (the numbered
+// circles grouping nearby stations) — without this, a cluster is a DOM node
+// with no visual treatment at all: no circle, no background, no border,
+// just an unstyled number easy to mistake for "the markers didn't load."
+import 'react-leaflet-cluster/dist/assets/MarkerCluster.css'
+import 'react-leaflet-cluster/dist/assets/MarkerCluster.Default.css'
 import { useState } from 'react'
 import { MapContainer, Marker, Polygon, Popup, TileLayer, useMapEvents } from 'react-leaflet'
 import MarkerClusterGroup from 'react-leaflet-cluster'

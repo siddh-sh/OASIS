@@ -13,6 +13,9 @@ import {
 } from 'recharts'
 import { DataSourceBadge } from '@/components/DataSourceBadge'
 import { LoadingRows } from '@/components/LoadingSkeleton'
+import { RecommendationPanel } from '@/components/RecommendationPanel'
+import { analyticsApi } from '@/api/analytics'
+import { ApiError } from '@/api/client'
 import { fisheriesBreakdownApi } from '@/api/fisheries'
 
 type GroupBy = 'none' | 'species' | 'region'
@@ -52,6 +55,38 @@ export function FisheriesPage() {
     for (const s of series) row[s.key] = s.points.find((p) => p.year === year)?.tonnes ?? 0
     return row
   })
+
+  // Every number below is computed straight from `rows`/`series` above — the
+  // same data the chart draws — rather than written as fixed text, so it
+  // stays correct as the Break down by / Region / Species filters change.
+  const fmt = (n: number) => Math.round(n).toLocaleString()
+  const totalByYear = rows.map((row) => {
+    let sum = 0
+    for (const s of series) sum += Number(row[s.key] ?? 0)
+    return sum
+  })
+  const firstYear = years[0]
+  const lastYear = years[years.length - 1]
+  const firstYearTotal = totalByYear[0]
+  const lastYearTotal = totalByYear[totalByYear.length - 1]
+  const grandTotal = totalByYear.reduce((a, b) => a + b, 0)
+  let peakIndex = 0
+  for (let i = 1; i < totalByYear.length; i++) if (totalByYear[i] > totalByYear[peakIndex]) peakIndex = i
+  const peakYear = years[peakIndex]
+  const peakValue = totalByYear[peakIndex]
+  const topSeries = series
+    .filter((s) => s.key !== 'other' && s.key !== 'total')
+    .map((s) => ({ label: s.label, total: s.points.reduce((a, p) => a + p.tonnes, 0) }))
+    .sort((a, b) => b.total - a.total)
+    .slice(0, 3)
+
+  const prediction = useQuery({
+    queryKey: ['analytics', 'predict-catch', speciesId, regionId],
+    queryFn: () => analyticsApi.predictCatch({ species_id: speciesId as number, region_id: regionId }),
+    enabled: speciesId !== undefined,
+    retry: false,
+  })
+  const predictionUnavailable = prediction.error instanceof ApiError && prediction.error.status === 404
 
   return (
     <div className="flex flex-col gap-6">
@@ -161,8 +196,105 @@ export function FisheriesPage() {
             <DataSourceBadge source="SAU" />
             <span>{data.data?.source}</span>
           </div>
+
+          {/* Every figure here is computed from the same data the chart
+              draws (see totalByYear/grandTotal/peakYear/topSeries above),
+              so it updates automatically with the filters instead of going
+              stale next to a chart that changed. */}
+          <div className="rounded-lg border border-ocean-200 p-4 text-sm dark:border-ocean-800">
+            <h2 className="mb-2 font-semibold text-ocean-700 dark:text-ocean-200">What this chart shows</h2>
+            <ul className="flex list-disc flex-col gap-1.5 pl-4 text-ocean-600 dark:text-ocean-300">
+              <li>
+                Total catch across all {years.length} years ({firstYear}–{lastYear}):{' '}
+                <strong>{fmt(grandTotal)} tonnes</strong>.
+              </li>
+              <li>
+                Catch in {firstYear}: <strong>{fmt(firstYearTotal)} t</strong>. Catch in {lastYear}:{' '}
+                <strong>{fmt(lastYearTotal)} t</strong> —{' '}
+                {firstYearTotal > 0 ? (
+                  <>
+                    about <strong>{(lastYearTotal / firstYearTotal).toFixed(1)}×</strong> higher over that period.
+                  </>
+                ) : (
+                  'no catch recorded at the very start of the series to compare against.'
+                )}
+              </li>
+              <li>
+                Busiest year: <strong>{peakYear}</strong>, with <strong>{fmt(peakValue)} t</strong> caught — the
+                tallest point on the chart.
+              </li>
+              {topSeries.length > 0 && (
+                <li>
+                  {groupBy === 'species' ? 'Top species' : 'Top region'} by total catch over the whole period:{' '}
+                  {topSeries.map((s, i) => (
+                    <span key={s.label}>
+                      {i > 0 && (i === topSeries.length - 1 ? ', and ' : ', ')}
+                      <strong>
+                        {s.label} ({fmt(s.total)} t)
+                      </strong>
+                    </span>
+                  ))}
+                  .
+                </li>
+              )}
+              <li>
+                The chart is <strong>stacked</strong>, so the height at any point on the x-axis is the total catch
+                that year — not a comparison of overlapping lines.
+              </li>
+            </ul>
+          </div>
         </>
       )}
+
+      <div className="rounded-lg border border-ocean-200 p-4 text-sm dark:border-ocean-800">
+        <h2 className="mb-2 font-semibold text-ocean-700 dark:text-ocean-200">Predict next year&rsquo;s catch</h2>
+        {speciesId === undefined ? (
+          <p className="text-ocean-500">Pick a species above to predict its catch for next year.</p>
+        ) : prediction.isLoading ? (
+          <LoadingRows rows={2} />
+        ) : predictionUnavailable ? (
+          <p className="text-ocean-500">
+            Not enough history for{' '}
+            {filters.data?.species.find((s) => s.species_id === speciesId)?.common_name ?? 'this species'} — the
+            model needs at least 6 consecutive annual observations.
+          </p>
+        ) : prediction.data ? (
+          (() => {
+            const p = prediction.data
+            const delta = p.predicted_tonnes - p.last_observed_tonnes
+            const pct = p.last_observed_tonnes > 0 ? (delta / p.last_observed_tonnes) * 100 : null
+            return (
+              <div className="flex flex-col gap-3">
+                <p className="text-ocean-600 dark:text-ocean-300">
+                  Predicted catch for <strong>{p.year}</strong>: <strong>{fmt(p.predicted_tonnes)} t</strong>{' '}
+                  (last observed: {fmt(p.last_observed_tonnes)} t
+                  {pct !== null && (
+                    <>
+                      , {pct >= 0 ? 'up' : 'down'} about <strong>{Math.abs(pct).toFixed(1)}%</strong>
+                    </>
+                  )}
+                  ).
+                </p>
+                <p className="text-xs text-ocean-500">
+                  Model skill vs. a no-change baseline: {(p.skill.skill_vs_persistence * 100).toFixed(0)}%
+                  {p.skill.skill_vs_persistence <= 0.1 && ' — barely better than assuming no change; read this prediction loosely.'}
+                </p>
+                {p.top_features.length > 0 && (
+                  <ul className="flex list-disc flex-col gap-1 pl-4 text-xs text-ocean-500">
+                    {p.top_features.slice(0, 3).map((f) => (
+                      <li key={f.feature}>
+                        <strong>{f.feature}</strong> pushed the prediction {f.direction} (contribution{' '}
+                        {f.contribution.toFixed(3)}).
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                <RecommendationPanel targetId={p.prediction_id} />
+              </div>
+            )
+          })()
+        ) : null}
+      </div>
 
       <div className="rounded-lg border border-ocean-200 p-4 text-sm dark:border-ocean-800">
         <h2 className="mb-1 font-semibold text-ocean-700 dark:text-ocean-200">About this breakdown</h2>

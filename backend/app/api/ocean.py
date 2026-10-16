@@ -43,6 +43,51 @@ def list_stations(
     return StationsPage(items=items, total=total or 0, limit=limit, offset=offset)
 
 
+@router.get("/stations/latest-readings")
+def latest_readings(
+    station_type: str | None = Query(default=None, description="in-situ-buoy | coastal-anchor | satellite-grid"),
+    bbox: str | None = Query(default=None, description="min_lon,min_lat,max_lon,max_lat"),
+    db: Session = Depends(get_db),
+):
+    """Most recent SST/chlorophyll reading per station, in one query — built
+    for map hover tooltips, where fetching per-marker for hundreds of
+    satellite-grid cells would be far too slow. `DISTINCT ON` (station_id)
+    with `ORDER BY station_id, timestamp DESC` picks the latest row per
+    station; see `idx_ocean_readings_station_time` for why this stays cheap
+    even across all ~666 stations.
+    """
+    stmt = (
+        select(
+            OceanographicReading.station_id,
+            OceanographicReading.timestamp,
+            OceanographicReading.sst,
+            OceanographicReading.chlorophyll_a,
+            OceanographicStation.region_id,
+        )
+        .join(OceanographicStation, OceanographicStation.station_id == OceanographicReading.station_id)
+        .distinct(OceanographicReading.station_id)
+    )
+    if station_type:
+        stmt = stmt.where(OceanographicStation.station_type == station_type)
+    parsed_bbox = BBox.parse(bbox)
+    geo_clause = bbox_filter(OceanographicStation.geom, parsed_bbox)
+    if geo_clause is not None:
+        stmt = stmt.where(geo_clause)
+    stmt = stmt.order_by(OceanographicReading.station_id, OceanographicReading.timestamp.desc())
+
+    rows = db.execute(stmt).all()
+    return [
+        {
+            "station_id": r.station_id,
+            "timestamp": r.timestamp,
+            "sst": float(r.sst) if r.sst is not None else None,
+            "chlorophyll_a": float(r.chlorophyll_a) if r.chlorophyll_a is not None else None,
+            "region_id": r.region_id,
+        }
+        for r in rows
+    ]
+
+
 @router.get("/readings", response_model=ReadingsPage)
 def list_readings(
     station_id: int | None = None,

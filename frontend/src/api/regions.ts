@@ -7,6 +7,14 @@ export interface LocateResult {
   state: string | null
 }
 
+export interface RegionSummary {
+  region_id: number
+  name: string
+  state: string | null
+}
+
 export const regionsApi = {
+  list: () => apiFetch<RegionSummary[]>('/api/regions'),
+
   locate: (lat: number, lon: number) => apiFetch<LocateResult>(`/api/regions/locate${toQuery({ lat, lon })}`),
 }
