@@ -18,7 +18,7 @@ This README tracks what's actually built.
 
 ```mermaid
 flowchart LR
-    Sources["7 real data sources\n(NOAA/INCOIS, Open-Meteo, OBIS, GBIF,\nFAO/OWID, Sea Around Us, BOLD)"] --> Pipeline[data-pipeline/ collectors]
+    Sources["7 real data sources\n(NOAA/INCOIS, Open-Meteo, OBIS, GBIF,\nFAO/OWID, FAO FishStat, Sea Around Us, BOLD)"] --> Pipeline[data-pipeline/ collectors]
     Pipeline --> DB[(Postgres + PostGIS + pgvector\nSupabase)]
     DB --> API[FastAPI backend]
     API --> UI[React frontend]
@@ -38,7 +38,7 @@ for the schema.
 | 1 | FastAPI backend core: SQLAlchemy models, read API (6 domains), Alembic baseline | Done |
 | 2 | Auth: Supabase Auth proxy + JWT verification | Done |
 | 3 | React frontend: layout, auth, 6 domain explorer pages | Done |
-| 4 | Feature engineering, prediction/forecasting models, anomaly detection, SHAP | Done — `backend/app/ml/`, four endpoints live, 1,375 anomalies detected. Skill vs persistence is reported honestly per model (see [`docs/model-cards.md`](docs/model-cards.md)): chlorophyll +17.5%, catch +1.5%, SST −0.0% |
+| 4 | Feature engineering, prediction/forecasting models, anomaly detection, SHAP | Done — `backend/app/ml/`, four endpoints live, 4,055 anomalies detected (data refreshed to October 2026). Skill vs persistence is reported honestly per model (see [`docs/model-cards.md`](docs/model-cards.md)): chlorophyll +3.5%, catch +4.4% (FAO data to 2024) / +1.8% (Sea Around Us to 2019), SST +1.8% |
 | 5 | LangGraph agent pipeline, NL chatbot, pgvector RAG | Done — tool-constrained ReAct loop over the Phase 4 functions, 1,482 species embedded locally with fastembed, recommendations narrated and cached. Runs on any OpenAI-compatible provider (Groq free tier by default) |
 | 6 | Correlation Studio, eDNA similarity search, SHAP viz, session export | Correlation Studio and eDNA k-mer search done; SHAP contributions are returned by the API and narrated in recommendations but not yet charted; session export still 501 |
 | 7 | Deployment/CI | `render.yaml` + `frontend/vercel.json` committed and CI deploy steps wired; **needs you to create the Render service and Vercel project** — see [`docs/deployment.md`](docs/deployment.md) |
@@ -114,7 +114,7 @@ dyno), LangGraph + any OpenAI-compatible LLM for the agent pipeline. Full ration
 ## No synthetic data
 
 Every number in this app traces to a real ingested record from a cited
-public source (NOAA, OBIS, GBIF, FAO/OWID, Sea Around Us, BOLD, Open-Meteo) or a model
+public source (NOAA, OBIS, GBIF, FAO/OWID, FAO FishStat, Sea Around Us, BOLD, Open-Meteo) or a model
 trained on one — see `data-pipeline/collectors/*.py` docstrings for each
 source's API and
 [`docs/developer-c-week1-flow.md`](docs/developer-c-week1-flow.md) for how

@@ -2,7 +2,7 @@
 
 Predicts SST and chlorophyll-a some number of 8-day composites ahead, from
 lag features. One *global* model is trained across all stations rather than
-one model per station: each station has only ~91 observations, which is far
+one model per station: each station has only ~100 observations, which is far
 too few to fit a gradient-boosted model, while pooling gives ~40,000 rows.
 Station identity still reaches the model through its own lags and rolling
 statistics, so a persistently warm cell forecasts warm.
@@ -14,19 +14,21 @@ learned model that cannot beat it is not worth shipping. `train()` returns
 both, and the model card in docs/ quotes both — a bare RMSE would look
 impressive and mean nothing.
 
-Measured on the real 458-station panel, that comparison says something
+Measured on the real panel (refreshed 2026-10-23), that comparison says something
 uncomfortable and worth stating plainly rather than hiding:
 
-    sst            model RMSE 0.548  vs persistence 0.548   skill  -0.0%
-    chlorophyll_a  model RMSE 2.576  vs persistence 3.122   skill +17.5%
+    sst            model RMSE 0.526  vs persistence 0.536   skill  +1.8%
+    chlorophyll_a  model RMSE 2.976  vs persistence 3.083   skill  +3.5%
 
-**The SST model does not beat persistence.** That is a property of the
+**The SST model barely beats persistence.** That is a property of the
 problem, not a bug: sea-surface temperature has enormous thermal inertia, so
 at an 8-day lead "tomorrow looks like today" is very nearly optimal unless
 you bring in atmospheric forcing and currents, which this dataset does not
 contain. Modelling the seasonal *residual* instead of the level was tried
-and came out slightly worse (RMSE 0.565). The learned model earns its place
-on chlorophyll, where blooms are episodic and persistence degrades.
+and came out slightly worse (RMSE 0.565). Chlorophyll gains a little more,
+because blooms are episodic and persistence degrades across them — but only
++3.5% on NOAA's current gap-filled product, down from +17.5% on the retired
+VIIRS-only one, so neither model is more than a modest improvement.
 
 The endpoint therefore returns these skill numbers alongside every forecast,
 so a caller — human or Phase-5 agent — can see how much to trust it.

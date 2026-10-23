@@ -158,9 +158,12 @@ def test_rag_retrieval_returns_ranked_species_documents(db_session):
 
 
 @requires_db
-def test_chat_endpoint_end_to_end_against_the_real_provider(client):
+def test_chat_endpoint_end_to_end_against_the_real_provider(client, db_session):
     """The only test that spends LLM quota. Skips without a key."""
+    from sqlalchemy import func, select
+
     from app.agents.llm import llm_available
+    from app.db.models import Species
 
     if not llm_available():
         pytest.skip("LLM_API_KEY not configured")
@@ -169,5 +172,8 @@ def test_chat_endpoint_end_to_end_against_the_real_provider(client):
     assert resp.status_code == 200, resp.text
     body = resp.json()
     assert body["message"]["role"] == "assistant"
-    assert "1482" in body["message"]["content"].replace(",", "")
+    # Read from the database rather than hardcoded: the catalogue grows
+    # whenever a new source contributes species.
+    expected = db_session.scalar(select(func.count()).select_from(Species))
+    assert str(expected) in body["message"]["content"].replace(",", "")
     assert body["message"]["sources"], "the answer should cite the tool it used"

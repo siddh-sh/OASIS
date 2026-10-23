@@ -103,3 +103,21 @@ def test_catch_decline_lists_declining_species_only(client):
     assert rows
     assert all(r["pct_per_year"] < 0 for r in rows)
     assert rows == sorted(rows, key=lambda r: r["pct_per_year"])
+
+
+@requires_db
+def test_catch_forecast_targets_next_calendar_year_from_fao(client):
+    from datetime import date
+
+    sardine = client.get("/api/species", params={"q": "Sardinella longiceps", "limit": 1}).json()["items"]
+    if not sardine:
+        pytest.skip("Indian oil sardine not loaded")
+    resp = client.get("/api/analytics/predict/catch", params={"species_id": sardine[0]["species_id"]})
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["source"] == "FAO"
+    assert body["year"] == date.today().year + 1
+    assert body["last_observed_year"] >= 2024
+    # The path runs year by year from the last real record to the target.
+    assert [p["year"] for p in body["path"]] == list(range(body["last_observed_year"] + 1, body["year"] + 1))
+    assert body["horizon_years"] == len(body["path"])

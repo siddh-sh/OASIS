@@ -73,6 +73,9 @@ class CatchPredictionOut(BaseModel):
     # holdout skill below only describes a 1-year horizon.
     horizon_years: int
     path: list[CatchForecastPoint]
+    # FAO (reported landings) or SAU (reconstructed catch); see
+    # app.ml.features.CATCH_SOURCES.
+    source: str
     skill: ModelSkill
     top_features: list[FeatureContribution]
 

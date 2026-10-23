@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.db.models import FisheriesCatch, FisheriesNationalTotal, Region, Species
 from app.db.session import get_db
+from app.ml.features import CATCH_SOURCES, DEFAULT_CATCH_SOURCE
 from app.schemas.fisheries import (
     FisheriesCatchOut,
     FisheriesCatchPage,
@@ -14,6 +15,11 @@ from app.schemas.fisheries import (
 )
 
 router = APIRouter(prefix="/api/fisheries", tags=["fisheries"])
+
+# Every species-level query is scoped to one source: FAO reported landings
+# and SAU reconstructed catch measure different things and would double
+# count if summed (see app.ml.features.CATCH_SOURCES).
+_SOURCE_DOC = "FAO (reported landings, 1950-2024) | SAU (reconstructed catch, 1950-2019)"
 
 
 @router.get("/catch", response_model=FisheriesCatchPage)
@@ -24,16 +30,16 @@ def list_catch(
     end_date: date | None = None,
     limit: int = Query(default=100, ge=1, le=1000),
     offset: int = Query(default=0, ge=0),
+    source: str = Query(default=DEFAULT_CATCH_SOURCE, pattern="^(FAO|SAU)$", description=_SOURCE_DOC),
     db: Session = Depends(get_db),
 ):
-    """Granular catch by region/species/date — Sea Around Us reconstructed
-    catch per taxon per EEZ, 1950-2019. `species_id` is null for the rows
-    SAU reports at family/order level or under its unattributed "Others"
-    bucket; `gear_type` is null throughout because SAU's gear breakdown does
-    not decompose by species (see data-pipeline/collectors/sea_around_us.py).
-    See /summary for FAO national annual totals, which measure something
-    different and must not be summed with these."""
-    stmt = select(FisheriesCatch)
+    """Granular catch by region/species/date from one source: FAO reported
+    landings per species per FAO fishing area (1950-2024), or Sea Around Us
+    reconstructed catch per taxon per EEZ (1950-2019). `species_id` is null
+    for higher-rank groups (FAO "nei", SAU family/order and "Others");
+    `gear_type` is null throughout. See /summary for FAO national annual
+    totals, which must not be summed with these."""
+    stmt = select(FisheriesCatch).where(FisheriesCatch.source == source)
     if region:
         stmt = stmt.join(Region, Region.region_id == FisheriesCatch.region_id).where(Region.name == region)
     if species_id is not None:
@@ -57,6 +63,7 @@ def summary(
     ),
     start_year: int | None = None,
     end_year: int | None = None,
+    source: str = Query(default=DEFAULT_CATCH_SOURCE, pattern="^(FAO|SAU)$", description=_SOURCE_DOC),
     db: Session = Depends(get_db),
 ):
     totals_stmt = select(FisheriesNationalTotal)
@@ -66,7 +73,7 @@ def summary(
         totals_stmt = totals_stmt.where(FisheriesNationalTotal.year <= end_year)
     totals = db.scalars(totals_stmt.order_by(FisheriesNationalTotal.year)).all()
 
-    catch_stmt = select(FisheriesCatch)
+    catch_stmt = select(FisheriesCatch).where(FisheriesCatch.source == source)
     if region:
         catch_stmt = catch_stmt.join(Region, Region.region_id == FisheriesCatch.region_id).where(Region.name == region)
     # A sample, not the series. The 1000-row limit here dated from when
@@ -82,7 +89,10 @@ def summary(
 
 
 @router.get("/filters")
-def catch_filters(db: Session = Depends(get_db)):
+def catch_filters(
+    source: str = Query(default=DEFAULT_CATCH_SOURCE, pattern="^(FAO|SAU)$", description=_SOURCE_DOC),
+    db: Session = Depends(get_db),
+):
     """Regions and species that actually have catch rows.
 
     Driving the dropdowns from this rather than from the full tables matters:
@@ -92,6 +102,7 @@ def catch_filters(db: Session = Depends(get_db)):
     regions = db.execute(
         select(Region.region_id, Region.name)
         .join(FisheriesCatch, FisheriesCatch.region_id == Region.region_id)
+        .where(FisheriesCatch.source == source)
         .group_by(Region.region_id, Region.name)
         .order_by(Region.name)
     ).all()
@@ -104,11 +115,21 @@ def catch_filters(db: Session = Depends(get_db)):
             func.sum(FisheriesCatch.catch_weight_kg).label("total"),
         )
         .join(FisheriesCatch, FisheriesCatch.species_id == Species.species_id)
+        .where(FisheriesCatch.source == source)
         .group_by(Species.species_id, Species.scientific_name, Species.common_name)
         .order_by(func.sum(FisheriesCatch.catch_weight_kg).desc())
     ).all()
 
+    years = db.execute(
+        select(func.min(FisheriesCatch.catch_date), func.max(FisheriesCatch.catch_date))
+        .where(FisheriesCatch.source == source)
+    ).one()
+
     return {
+        "source": source,
+        "label": CATCH_SOURCES[source]["label"],
+        "first_year": years[0].year if years[0] else None,
+        "last_year": years[1].year if years[1] else None,
         "regions": [{"region_id": r[0], "name": r[1]} for r in regions],
         # Ordered by total catch so the dropdown opens on the species that
         # matter, not alphabetically on something landing three tonnes.
@@ -132,6 +153,7 @@ def catch_timeseries(
     start_year: int | None = None,
     end_year: int | None = None,
     top_n: int = Query(default=8, ge=1, le=20, description="series kept when grouping"),
+    source: str = Query(default=DEFAULT_CATCH_SOURCE, pattern="^(FAO|SAU)$", description=_SOURCE_DOC),
     db: Session = Depends(get_db),
 ):
     """Annual catch, optionally broken down by species or region.
@@ -161,6 +183,7 @@ def catch_timeseries(
     elif group_by == "region":
         stmt = stmt.join(Region, Region.region_id == FisheriesCatch.region_id)
 
+    stmt = stmt.where(FisheriesCatch.source == source)
     if region_id is not None:
         stmt = stmt.where(FisheriesCatch.region_id == region_id)
     if species_id is not None:
@@ -173,7 +196,7 @@ def catch_timeseries(
     stmt = stmt.group_by(year) if key is None else stmt.group_by(year, key, label)
     rows = db.execute(stmt.order_by(year)).all()
 
-    meta = {"unit": "tonnes", "source": "Sea Around Us reconstruction (CC-BY-NC-SA 4.0)"}
+    meta = {"unit": "tonnes", "source": CATCH_SOURCES[source]["citation"], "source_key": source}
 
     if key is None:
         return {

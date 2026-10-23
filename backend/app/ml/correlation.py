@@ -6,7 +6,7 @@ both to a **common monthly grain** and joining on month.
 
 The grain problem is the whole difficulty here, and it is why this is not
 just `df1.corr(df2)`. The four series are measured on incompatible
-schedules: satellite composites are 8-day over a 458-cell grid, weather is
+schedules: satellite composites are 8-day over a few-hundred-cell grid, weather is
 daily at 18 coastal anchors. Monthly means over all stations are the
 coarsest grain that all of them share honestly. Anything finer would require
 inventing values for dates a series does not cover.
@@ -43,7 +43,7 @@ MIN_MONTHS = 6
 
 
 def _monthly_series(db: Session, variable: str, region: str | None) -> pd.Series:
-    """Monthly spatial mean for one variable.
+    """Monthly spatial mean for one variable — median for chlorophyll.
 
     `region` is honoured only for weather. Satellite grid cells sit in open
     ocean with region_id NULL, so filtering an ocean series by region would
@@ -53,8 +53,17 @@ def _monthly_series(db: Session, variable: str, region: str | None) -> pd.Series
     if variable in ("sst", "chlorophyll_a"):
         col = getattr(OceanographicReading, variable)
         month = func.date_trunc("month", OceanographicReading.timestamp)
+        # Chlorophyll is heavy-tailed (0.03 to ~100 mg/m3 across this grid),
+        # so a monthly mean tracks a few turbid coastal cells, not the basin.
+        # Against SST the mean gave r = +0.000 on the current data where the
+        # median gives -0.71 — the known warm-water/low-chlorophyll signal.
+        agg = (
+            func.percentile_cont(0.5).within_group(col)
+            if variable == "chlorophyll_a"
+            else func.avg(col)
+        )
         stmt = (
-            select(month.label("month"), func.avg(col).label("value"))
+            select(month.label("month"), agg.label("value"))
             .where(col.is_not(None))
             .group_by(month)
             .order_by(month)
@@ -123,6 +132,11 @@ def correlate(db: Session, var1: str, var2: str, region: str | None = None) -> d
         "Computed on spatial means across stations — this describes national month-to-month "
         "co-movement, not a relationship at any single location."
     )
+    if "chlorophyll_a" in (var1, var2):
+        notes.append(
+            "Chlorophyll uses the monthly median, not the mean: its values are heavily skewed, "
+            "and a mean would follow a few turbid coastal cells rather than the basin."
+        )
 
     return {
         "var1": var1, "var2": var2, "region": region,

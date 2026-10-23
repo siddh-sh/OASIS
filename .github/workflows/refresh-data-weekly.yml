@@ -11,6 +11,12 @@ on:
     - cron: "30 3 * * 0"
   workflow_dispatch:
 
+# The commit step pushes refreshed seed CSVs back to the repo. Without this
+# the default read-only token is refused (403) and every run fails after
+# having already fetched the data.
+permissions:
+  contents: write
+
 concurrency:
   group: refresh-data
   cancel-in-progress: false
@@ -18,6 +24,11 @@ concurrency:
 jobs:
   refresh:
     runs-on: ubuntu-latest
+    # Job-level so the load steps' `if:` can see it (a step's own env is not
+    # yet set when its condition is evaluated). Empty until the repository
+    # secret is added, which skips those steps.
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
     timeout-minutes: 60
 
     steps:
@@ -49,6 +60,13 @@ jobs:
         continue-on-error: true
         run: python -u data-pipeline/collectors/fao_fisheries.py
 
+      # FAO publishes the species-level release once a year (March); bump
+      # RELEASE in the collector when a new one appears. Re-pulling the same
+      # release is a no-op diff.
+      - name: Fisheries species catch (FAO FishStat)
+        continue-on-error: true
+        run: python -u data-pipeline/collectors/fao_capture.py
+
       - name: Show what changed
         run: git --no-pager diff --stat -- data-pipeline/seeds/
 
@@ -63,3 +81,20 @@ jobs:
           fi
           git commit -m "chore(data): weekly refresh of biodiversity, genomics and fisheries data"
           git push
+
+      # Seed CSVs in git are only half the job: the app reads the database.
+      # Skipped (not failed) until a DATABASE_URL repository secret exists.
+      # The loader is insert-only with ON CONFLICT DO NOTHING, so re-running
+      # it just adds the rows that are new.
+      - name: Load into database
+        if: env.DATABASE_URL != ''
+        run: python -u data-pipeline/cleaning/load_seeds.py
+
+      # New species from OBIS/GBIF/FAO are invisible to the chatbot's species
+      # search until they are embedded.
+      - name: Re-embed species for chatbot retrieval
+        if: env.DATABASE_URL != ''
+        working-directory: backend
+        run: |
+          pip install -r requirements.txt
+          python -m app.agents.embeddings

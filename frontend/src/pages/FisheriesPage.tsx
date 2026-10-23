@@ -16,7 +16,7 @@ import { LoadingRows } from '@/components/LoadingSkeleton'
 import { RecommendationPanel } from '@/components/RecommendationPanel'
 import { analyticsApi } from '@/api/analytics'
 import { ApiError } from '@/api/client'
-import { fisheriesBreakdownApi } from '@/api/fisheries'
+import { fisheriesBreakdownApi, type CatchSource } from '@/api/fisheries'
 
 type GroupBy = 'none' | 'species' | 'region'
 
@@ -27,23 +27,26 @@ const OTHER_COLOR = '#94a3b8'
 
 export function FisheriesPage() {
   const { t } = useTranslation()
+  // FAO by default: it runs to 2024, where Sea Around Us stops at 2019.
+  const [source, setSource] = useState<CatchSource>('FAO')
   const [groupBy, setGroupBy] = useState<GroupBy>('species')
   const [regionId, setRegionId] = useState<number>()
   const [speciesId, setSpeciesId] = useState<number>()
 
   const filters = useQuery({
-    queryKey: ['fisheries', 'filters'],
-    queryFn: () => fisheriesBreakdownApi.filters(),
+    queryKey: ['fisheries', 'filters', source],
+    queryFn: () => fisheriesBreakdownApi.filters(source),
   })
 
   const data = useQuery({
-    queryKey: ['fisheries', 'timeseries', groupBy, regionId, speciesId],
+    queryKey: ['fisheries', 'timeseries', source, groupBy, regionId, speciesId],
     queryFn: () =>
       fisheriesBreakdownApi.timeseries({
         group_by: groupBy,
         region_id: regionId,
         species_id: speciesId,
         top_n: 8,
+        source,
       }),
   })
 
@@ -81,11 +84,12 @@ export function FisheriesPage() {
     .slice(0, 3)
 
   const prediction = useQuery({
-    queryKey: ['analytics', 'predict-catch', speciesId, regionId],
-    queryFn: () => analyticsApi.predictCatch({ species_id: speciesId as number, region_id: regionId }),
+    queryKey: ['analytics', 'predict-catch', source, speciesId, regionId],
+    queryFn: () => analyticsApi.predictCatch({ species_id: speciesId as number, region_id: regionId, source }),
     enabled: speciesId !== undefined,
     retry: false,
   })
+  const regionName = (id: number) => filters.data?.regions.find((r) => r.region_id === id)?.name
   const predictionUnavailable = prediction.error instanceof ApiError && prediction.error.status === 404
 
   return (
@@ -97,6 +101,24 @@ export function FisheriesPage() {
 
       <div className="flex flex-wrap items-end gap-3">
         <label className="flex flex-col gap-1 text-xs text-ocean-500">
+          Data source
+          <select
+            value={source}
+            onChange={(e) => {
+              // Region and species ids differ between the two sources, so
+              // filters from one would silently match nothing in the other.
+              setSource(e.target.value as CatchSource)
+              setRegionId(undefined)
+              setSpeciesId(undefined)
+            }}
+            className="rounded-md border border-ocean-300 px-3 py-2 text-sm text-ocean-950 dark:border-ocean-700 dark:bg-ocean-900 dark:text-ocean-50"
+          >
+            <option value="FAO">FAO reported landings (1950–2024)</option>
+            <option value="SAU">Sea Around Us reconstruction (1950–2019)</option>
+          </select>
+        </label>
+
+        <label className="flex flex-col gap-1 text-xs text-ocean-500">
           Break down by
           <select
             value={groupBy}
@@ -105,7 +127,7 @@ export function FisheriesPage() {
           >
             <option value="none">Total only</option>
             <option value="species">Species</option>
-            <option value="region">Region (EEZ)</option>
+            <option value="region">{source === 'FAO' ? 'Region (FAO fishing area)' : 'Region (EEZ)'}</option>
           </select>
         </label>
 
@@ -193,7 +215,7 @@ export function FisheriesPage() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2 text-xs text-ocean-500">
-            <DataSourceBadge source="SAU" />
+            <DataSourceBadge source={source} />
             <span>{data.data?.source}</span>
           </div>
 
@@ -266,7 +288,11 @@ export function FisheriesPage() {
             return (
               <div className="flex flex-col gap-3">
                 <p className="text-ocean-600 dark:text-ocean-300">
-                  Forecast catch for <strong>{p.year}</strong>: <strong>{fmt(p.predicted_tonnes)} t</strong>{' '}
+                  Forecast catch for <strong>{p.year}</strong>
+                  {/* The model forecasts one region at a time; with "All
+                      regions" selected the API picks the first, so name it. */}
+                  {regionName(p.region_id) && <> in {regionName(p.region_id)}</>}:{' '}
+                  <strong>{fmt(p.predicted_tonnes)} t</strong>{' '}
                   (last real record: {fmt(p.last_observed_tonnes)} t in {p.last_observed_year}
                   {pct !== null && (
                     <>
@@ -277,9 +303,10 @@ export function FisheriesPage() {
                 </p>
                 {p.horizon_years > 1 && (
                   <>
-                    {/* The source (Sea Around Us) stops in 2019, so a future
-                        year is reached by feeding each forecast back in as
-                        the next year's input. Say so, and show the path. */}
+                    {/* Neither source reaches the present (FAO 2024, SAU 2019),
+                        so a future year is reached by feeding each forecast
+                        back in as the next year's input. Say so, and show
+                        the path. */}
                     <p className="text-xs text-amber-500">
                       The catch records end in {p.last_observed_year}, so this forecast is projected{' '}
                       {p.horizon_years} years forward, each year built on the previous year&rsquo;s forecast. Treat
@@ -321,18 +348,35 @@ export function FisheriesPage() {
         <ul className="flex list-disc flex-col gap-1 pl-4 text-ocean-500">
           {/* The doc asked for a Kerala/Goa/Odisha split. It isn't available,
               and saying so is better than inventing a state attribution. */}
-          <li>
-            Region here means <strong>EEZ</strong>, not Indian state — Sea Around Us reports catch by exclusive
-            economic zone, so a state-level split (Kerala / Goa / Odisha) is not derivable from this source.
-          </li>
+          {source === 'FAO' ? (
+            <li>
+              Region here means <strong>FAO major fishing area</strong>, not Indian state — Area 51 is the Arabian
+              Sea (west) coast, Area 57 the Bay of Bengal (east) coast and Andaman &amp; Nicobar. FAO does not
+              report a state-level split (Kerala / Goa / Odisha).
+            </li>
+          ) : (
+            <li>
+              Region here means <strong>EEZ</strong>, not Indian state — Sea Around Us reports catch by exclusive
+              economic zone, so a state-level split (Kerala / Goa / Odisha) is not derivable from this source.
+            </li>
+          )}
           <li>
             Grouping by species charts the eight largest by total catch; the remainder are summed into
             &ldquo;Other&rdquo; so the yearly totals still add up.
           </li>
-          <li>
-            These are <strong>reconstructed</strong> figures including estimated discards and unreported catch. They
-            are not comparable with the FAO reported-landings series and must not be summed with it.
-          </li>
+          {source === 'FAO' ? (
+            <li>
+              These are <strong>officially reported landings</strong> (FAO Global Capture Production, CC BY 4.0).
+              They exclude discards and unreported catch, so they run well below the Sea Around Us reconstruction
+              &mdash; the two are different measurements and must not be compared year-for-year or summed. Some
+              species only appear once India began reporting them separately (e.g. black pomfret from 2019).
+            </li>
+          ) : (
+            <li>
+              These are <strong>reconstructed</strong> figures including estimated discards and unreported catch.
+              They are not comparable with the FAO reported-landings series and must not be summed with it.
+            </li>
+          )}
         </ul>
       </div>
     </div>

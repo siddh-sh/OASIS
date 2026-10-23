@@ -65,7 +65,7 @@ def test_fisheries_summary_has_both_grains(client):
 
 @requires_db
 def test_fisheries_catch_returns_species_resolved_rows(client):
-    resp = client.get("/api/fisheries/catch", params={"limit": 100})
+    resp = client.get("/api/fisheries/catch", params={"limit": 100, "source": "SAU"})
     assert resp.status_code == 200
     body = resp.json()
     assert body["total"] > 10_000, "Sea Around Us load should give ~14k taxon-year rows"
@@ -75,6 +75,28 @@ def test_fisheries_catch_returns_species_resolved_rows(client):
     # tonnage but no species. Both are expected — see schema.sql.
     assert any(r["species_id"] is not None for r in body["items"])
     assert all(r["catch_weight_kg"] > 0 for r in body["items"])
+
+
+@requires_db
+def test_fisheries_catch_defaults_to_fao_and_never_mixes_sources(client):
+    # FAO is the default because it reaches 2024; SAU stops at 2019. The two
+    # measure different things, so a response must only ever hold one.
+    fao = client.get("/api/fisheries/catch", params={"limit": 1000}).json()
+    assert fao["total"] > 5_000
+    assert {r["source"] for r in fao["items"]} == {"FAO"}
+
+    filters = client.get("/api/fisheries/filters").json()
+    assert filters["source"] == "FAO" and filters["last_year"] >= 2024
+
+    sau_total = client.get("/api/fisheries/timeseries", params={"source": "SAU"}).json()
+    fao_total = client.get("/api/fisheries/timeseries", params={"source": "FAO"}).json()
+    sau_2019 = next(p["tonnes"] for p in sau_total["series"][0]["points"] if p["year"] == 2019)
+    fao_2019 = next(p["tonnes"] for p in fao_total["series"][0]["points"] if p["year"] == 2019)
+    # Summing the sources would make each total exceed the other's on its own.
+    assert sau_2019 != fao_2019
+    assert max(p["year"] for p in sau_total["series"][0]["points"]) == 2019
+
+    assert client.get("/api/fisheries/catch", params={"source": "BOTH"}).status_code == 422
 
 
 @requires_db

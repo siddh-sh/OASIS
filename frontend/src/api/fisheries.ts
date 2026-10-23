@@ -10,6 +10,13 @@ export const fisheriesApi = {
     apiFetch<FisheriesSummary>(`/api/fisheries/summary${toQuery(params)}`),
 }
 
+/**
+ * The two species-level catch series. They measure different things — FAO is
+ * reported landings, SAU a reconstruction adding discards and unreported
+ * catch — so the UI shows exactly one at a time and never sums them.
+ */
+export type CatchSource = 'FAO' | 'SAU'
+
 export interface CatchSeries {
   key: string
   label: string
@@ -21,9 +28,14 @@ export interface CatchTimeseries {
   series: CatchSeries[]
   unit: string
   source: string
+  source_key: CatchSource
 }
 
 export interface CatchFilters {
+  source: CatchSource
+  label: string
+  first_year: number | null
+  last_year: number | null
   regions: { region_id: number; name: string }[]
   species: {
     species_id: number
@@ -34,13 +46,14 @@ export interface CatchFilters {
 }
 
 export const fisheriesBreakdownApi = {
-  filters: () => apiFetch<CatchFilters>('/api/fisheries/filters'),
+  filters: (source: CatchSource) => apiFetch<CatchFilters>(`/api/fisheries/filters${toQuery({ source })}`),
   timeseries: (
     params: {
       group_by?: 'none' | 'species' | 'region'
       region_id?: number
       species_id?: number
       top_n?: number
+      source?: CatchSource
     } = {},
   ) => apiFetch<CatchTimeseries>(`/api/fisheries/timeseries${toQuery(params)}`),
 }

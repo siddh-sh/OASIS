@@ -206,13 +206,14 @@ def build_tools(db: Session) -> list[StructuredTool]:
         return int(hits[0]["source_id"]) if hits and hits[0]["source_table"] == "species" else None
 
     def predict_catch(species_id: int | None = None, species_name: str | None = None) -> dict:
-        """Catch tonnage forecast for a species for next calendar year.
+        """Catch tonnage forecast for a species for next calendar year, from FAO
+        reported landings (data to 2024).
         Pass species_name (e.g. 'Indian oil sardine') OR species_id — not both."""
         species_id = _resolve_species(species_id, species_name)
         if species_id is None:
             return {"error": "provide species_id or species_name"}
-        model = registry.get_catch_model(db)
-        results = predict_next_year(db, model, species_id)
+        model = registry.get_catch_model(db, "FAO")
+        results = predict_next_year(db, model, species_id, source="FAO")
         if not results:
             return {"error": f"species {species_id} lacks enough annual catch history"}
         r = results[0]
@@ -223,20 +224,20 @@ def build_tools(db: Session) -> list[StructuredTool]:
             "last_observed_tonnes": round(r["last_observed_tonnes"], 1),
             "skill_vs_persistence": round(model.metrics["skill_vs_persistence"], 3),
             "caveat": (
-                f"Sea Around Us data ends in {r['last_observed_year']}; this forecast is rolled forward "
+                f"FAO reported landings end in {r['last_observed_year']}; this forecast is rolled forward "
                 f"{r['horizon_years']} years from there, so uncertainty is much larger than the 1-year skill implies."
             ),
         }
 
     def catch_history(species_id: int | None = None, species_name: str | None = None) -> dict:
-        """Annual catch series for a species across the Indian EEZs.
-        Pass species_name OR species_id."""
+        """Annual catch series for a species in Indian waters, from FAO reported
+        landings (1950-2024). Pass species_name OR species_id."""
         species_id = _resolve_species(species_id, species_name)
         if species_id is None:
             return {"error": "provide species_id or species_name"}
         rows = db.execute(
             select(FisheriesCatch.catch_date, func.sum(FisheriesCatch.catch_weight_kg))
-            .where(FisheriesCatch.species_id == species_id)
+            .where(FisheriesCatch.species_id == species_id, FisheriesCatch.source == "FAO")
             .group_by(FisheriesCatch.catch_date)
             .order_by(FisheriesCatch.catch_date.desc())
             .limit(MAX_ROWS)
@@ -246,7 +247,7 @@ def build_tools(db: Session) -> list[StructuredTool]:
         return {
             "species_id": species_id,
             "years": [{"year": d.year, "tonnes": round(float(w) / 1000, 1)} for d, w in rows],
-            "source": "Sea Around Us reconstruction (includes estimated discards and unreported catch)",
+            "source": "FAO Global Capture Production (officially reported landings)",
         }
 
     def declining_species() -> list[dict]:
@@ -302,7 +303,7 @@ def build_tools(db: Session) -> list[StructuredTool]:
         return {
             "row_counts": {k: int(v or 0) for k, v in counts.items()},
             "domains": ["oceanographic", "satellite", "weather", "fisheries", "biodiversity", "molecular"],
-            "sources": ["NOAA", "Open-Meteo", "OBIS", "GBIF", "FAO/OWID", "Sea Around Us", "BOLD"],
+            "sources": ["NOAA", "Open-Meteo", "OBIS", "GBIF", "FAO/OWID", "FAO FishStat", "Sea Around Us", "BOLD"],
         }
 
     return [

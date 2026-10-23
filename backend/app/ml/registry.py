@@ -25,6 +25,7 @@ from sqlalchemy.orm import Session
 
 from app.ml import catch as catch_mod
 from app.ml import forecast as forecast_mod
+from app.ml.features import CATCH_SOURCES, DEFAULT_CATCH_SOURCE
 
 ARTIFACT_DIR = Path(__file__).resolve().parents[3] / "ml-models" / "artifacts"
 
@@ -61,8 +62,17 @@ def get_forecast_model(db: Session, variable: str):
     return _load_or_train(db, f"forecast_{variable}", lambda s: forecast_mod.train(s, variable))
 
 
-def get_catch_model(db: Session):
-    return _load_or_train(db, "catch", catch_mod.train)
+# FAO has too few species to train well alone; see catch.train's pool_with.
+CATCH_POOL = {"FAO": "SAU"}
+
+
+def get_catch_model(db: Session, source: str = DEFAULT_CATCH_SOURCE):
+    # One model per catch source, each evaluated only on its own series.
+    return _load_or_train(
+        db,
+        f"catch_{source.lower()}",
+        lambda s: catch_mod.train(s, source=source, pool_with=CATCH_POOL.get(source)),
+    )
 
 
 def train_all(db: Session) -> dict[str, dict]:
@@ -77,10 +87,12 @@ def train_all(db: Session) -> dict[str, dict]:
         _MEMORY[name] = model
         summary[name] = model.metrics
 
-    model = catch_mod.train(db)
-    joblib.dump(model, _path("catch"))
-    _MEMORY["catch"] = model
-    summary["catch"] = model.metrics
+    for source in CATCH_SOURCES:
+        name = f"catch_{source.lower()}"
+        model = catch_mod.train(db, source=source, pool_with=CATCH_POOL.get(source))
+        joblib.dump(model, _path(name))
+        _MEMORY[name] = model
+        summary[name] = model.metrics
 
     return summary
 
@@ -95,7 +107,7 @@ def main() -> None:
     if SessionLocal is None:
         sys.exit("DATABASE_URL not configured — see docs/supabase-setup.md")
 
-    names = ["forecast_sst", "forecast_chlorophyll_a", "catch"]
+    names = ["forecast_sst", "forecast_chlorophyll_a", *(f"catch_{s.lower()}" for s in CATCH_SOURCES)]
     if args.check:
         for name in names:
             p = _path(name)

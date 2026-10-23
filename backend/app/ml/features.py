@@ -7,19 +7,22 @@ Phase 5 exposes them as agent tools.
 
 Shape of the real data these are designed against (verified, not assumed):
 
-  * `oceanographic_readings` SST — 458 satellite grid stations x exactly 91
-    timesteps, 2024-07-27 to 2026-07-22, 8-day composites (one 13-day gap).
-    A balanced panel, which is why per-station modelling is viable at all.
-  * `oceanographic_readings` chlorophyll-a — 177 stations x 87 timesteps.
-  * `fisheries_catch` — 110 species with a resolved species_id, median 63
-    annual observations each.
+  * `oceanographic_readings` SST — 458 satellite grid stations x 102
+    timesteps, 2024-07-27 to 2026-10-13, every 8th calendar day from a fixed
+    anchor (see collectors/noaa_erddap.py). A balanced panel, which is why
+    per-station modelling is viable at all.
+  * `oceanographic_readings` chlorophyll-a — 666 stations x 92 timesteps,
+    2024-10-07 to 2026-10-05 (NOAA DINEOF gap-filled product).
+  * `fisheries_catch` — two separate species-level catch sources, told
+    apart by `source` and never summed (see CATCH_SOURCES): Sea Around Us,
+    110 species, 1950-2019; FAO capture, 31 species, 1950-2024.
 
 **Two years is the binding constraint on anything seasonal.** A real marine
 heatwave definition (Hobday et al.) uses a 30-year daily climatology; with
 two annual cycles there are only two samples per day-of-year, so a
 per-day-of-year climatology would be almost pure noise. `seasonal_baseline`
 below therefore fits a single annual harmonic plus linear trend to each
-station's own series — 4 parameters against 91 observations, which is
+station's own series — 4 parameters against ~100 observations, which is
 well-posed — and anomalies are scored on the residuals. That separates
 "it is August" from "it is unusually warm for August" honestly, while not
 pretending to a climatological baseline the data cannot support.
@@ -32,6 +35,23 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db.models import FisheriesCatch, OceanographicReading
+
+# The two species-resolved catch series in fisheries_catch. They measure
+# different things — FAO is officially reported landings, SAU a
+# reconstruction adding discards and unreported catch (SAU's 2019 oil
+# sardine figure is about twice FAO's) — so every query picks exactly one.
+# FAO is the default because it reaches ~18 months before the present.
+CATCH_SOURCES = {
+    "FAO": {
+        "label": "FAO reported landings",
+        "citation": "FAO Global Capture Production, March 2026 release (CC BY 4.0)",
+    },
+    "SAU": {
+        "label": "Sea Around Us reconstructed catch",
+        "citation": "Sea Around Us reconstruction (CC-BY-NC-SA 4.0)",
+    },
+}
+DEFAULT_CATCH_SOURCE = "FAO"
 
 # Satellite composites are 8-day; one step ahead is ~8 days.
 STEP_DAYS = 8
@@ -70,19 +90,22 @@ def load_ocean_series(db: Session, variable: str, station_id: int | None = None)
     return df
 
 
-def load_catch_series(db: Session, species_id: int | None = None) -> pd.DataFrame:
-    """Long-format (species_id, region_id, year, catch_tonnes) from Sea Around Us.
+def load_catch_series(
+    db: Session, species_id: int | None = None, source: str = DEFAULT_CATCH_SOURCE
+) -> pd.DataFrame:
+    """Long-format (species_id, region_id, year, catch_tonnes) from one
+    catch source (see CATCH_SOURCES).
 
-    Only species-resolved rows: SAU's family/order aggregates and its
-    unattributed "Others" bucket carry real tonnage but have no species_id,
-    so they cannot be modelled per species (see schema.sql).
+    Only species-resolved rows: family/order aggregates (SAU), "nei" groups
+    (FAO) and SAU's unattributed "Others" bucket carry real tonnage but have
+    no species_id, so they cannot be modelled per species (see schema.sql).
     """
     stmt = select(
         FisheriesCatch.species_id,
         FisheriesCatch.region_id,
         FisheriesCatch.catch_date,
         FisheriesCatch.catch_weight_kg,
-    ).where(FisheriesCatch.species_id.is_not(None))
+    ).where(FisheriesCatch.species_id.is_not(None), FisheriesCatch.source == source)
     if species_id is not None:
         stmt = stmt.where(FisheriesCatch.species_id == species_id)
     stmt = stmt.order_by(FisheriesCatch.species_id, FisheriesCatch.region_id, FisheriesCatch.catch_date)
@@ -95,6 +118,18 @@ def load_catch_series(db: Session, species_id: int | None = None) -> pd.DataFram
         return df
     df["year"] = pd.to_datetime(df["catch_date"]).dt.year
     df["catch_tonnes"] = df["catch_weight_kg"].astype(float) / 1000.0
+    # Drop each series' leading zeros. FAO records 0 t for the years before
+    # it began reporting a species separately (black pomfret is lumped into
+    # a "nei" group until 2019), so the first real year reads as a jump from
+    # nothing — a reporting change, not a catch change. 479 such rows in FAO,
+    # 1 in SAU; removing them moved FAO-only holdout skill from -3.9% to
+    # -1.7%. Interior zeros are kept: dropping them leaves gaps that silently
+    # turn lag_1 into "some earlier year", which measured worse (-10.5%).
+    started = (
+        df.assign(_nz=df["catch_tonnes"] > 0)
+        .groupby(["species_id", "region_id"])["_nz"].cummax()
+    )
+    df = df[started]
     return df[["species_id", "region_id", "year", "catch_tonnes"]]
 
 

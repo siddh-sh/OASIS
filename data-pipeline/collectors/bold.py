@@ -11,7 +11,21 @@ Query language: semicolon-delimited "scope:subscope:value" triplets
 (scopes: tax, geo, ids, bin, recordsetcode). Two-step flow:
   1. GET /api/query?query=...        -> {query_id}
   2. GET /api/documents/{query_id}?length=N&start=OFFSET -> {data, recordsTotal}
+
+**Keeping the most recent records.** India has ~83,000 records and the API
+can neither filter nor sort by date, so taking "the first 2,000 returned"
+(as this originally did) gave an arbitrary, mostly undated slice — 3 of
+2,000 were from 2022 or later. Instead every page is scanned (~170 pages,
+~10 minutes) and only the MAX_RECORDS newest by collection date are kept,
+in a bounded heap so memory stays flat. Records without a collection date
+or without a real sequence are skipped: the first can't be ranked by
+recency, the second is useless to the k-mer similarity search.
+
+BOLD's edge returns 403 to GitHub Actions runners (datacenter IPs), so the
+weekly workflow's BOLD step fails there; run this from a normal machine.
 """
+import heapq
+from datetime import date
 import csv
 import json
 import time
@@ -32,7 +46,7 @@ HEADERS = {
 
 QUERY = "geo:country:India"
 PAGE_SIZE = 500
-MAX_RECORDS = 2000  # Week-1 volume cap
+MAX_RECORDS = 2000  # newest records kept (see module docstring)
 
 FIELDS = [
     "processid",
@@ -92,24 +106,47 @@ def main():
     query_id = get_query_id()
     print(f"query_id: {query_id}")
 
-    all_records = []
+    # Min-heap of (date, processid, seq, record): the oldest kept record
+    # sits on top, so each newer one displaces it in O(log n). One specimen
+    # (processid) can carry several markers, so `seq` breaks ties before the
+    # comparison ever reaches the record dicts.
+    newest = []
+    seq = 0
+    # Submitter typos exist (a 2050-03-08 collection date was seen); a date
+    # after today would otherwise outrank every genuine recent record.
+    today = date.today().isoformat()
     start = 0
     total = None
-    while len(all_records) < MAX_RECORDS:
-        print(f"Fetching BOLD records start={start} ...")
+    scanned = 0
+    while True:
         page = fetch_page(query_id, start)
         total = page.get("recordsTotal")
         data = page.get("data", [])
         if not data:
             break
-        all_records.extend(data)
+        for r in data:
+            when = (r.get("collection_date_start") or "").strip()
+            if not when or when[:10] > today or not (r.get("nuc") or "").strip("-"):
+                continue
+            seq += 1
+            item = (when, r.get("processid") or "", seq, r)
+            if len(newest) < MAX_RECORDS:
+                heapq.heappush(newest, item)
+            elif item[:3] > newest[0][:3]:
+                heapq.heapreplace(newest, item)
+        scanned += len(data)
         start += len(data)
+        if start % 10_000 < PAGE_SIZE:
+            print(f"  scanned {scanned:,} / {total:,}; oldest kept {newest[0][0] if newest else '-'}")
         if len(data) < PAGE_SIZE:
             break
         time.sleep(0.3)
 
-    print(f"\nrecordsTotal reported by BOLD for '{QUERY}': {total}")
-    all_records = all_records[:MAX_RECORDS]
+    print(f"\nrecordsTotal reported by BOLD for '{QUERY}': {total}; scanned {scanned:,}")
+    all_records = [r for *_, r in sorted(newest, key=lambda t: t[:3], reverse=True)]
+    if all_records:
+        print(f"Kept {len(all_records)} newest: {all_records[-1]['collection_date_start']} to "
+              f"{all_records[0]['collection_date_start']}")
 
     raw_path = OUT_DIR / "bold_raw.json"
     raw_path.write_text(json.dumps(all_records), encoding="utf-8")

@@ -6,8 +6,11 @@ holdout, and is reproducible with `python -m app.ml.registry` from
 than omitted.
 
 **The honest headline:** of the three predictive models, one earns its keep
-(chlorophyll forecasting, +17.5%), one is marginal (catch, +1.5%), and one
-does not beat the trivial baseline at all (SST forecasting, −0.0%). The
+none clearly earns its keep: chlorophyll forecasting +3.5%, catch +4.4% on
+FAO data / +1.8% on Sea Around Us, SST forecasting +1.8% — all small margins
+over the trivial baseline. (Chlorophyll scored +17.5% on NOAA's retired
+VIIRS-only product; on its replacement, refreshed October 2026, it does not
+reproduce — see §1.) The
 component that works unambiguously well is the **anomaly detector**, which
 is not a learned model at all. That is a reasonable outcome for this
 dataset, and it is more useful to a reader than three flattering numbers.
@@ -37,50 +40,66 @@ badly on autocorrelated data.
 | **Task** | Predict SST / chlorophyll-a *n* 8-day composites ahead |
 | **Model** | `HistGradientBoostingRegressor` (300 iters, lr 0.06, depth 6) |
 | **Features** | `lag_1..3`, `roll_mean_4`, `roll_std_4`, `doy_sin`, `doy_cos` |
-| **Training data** | 458 stations × 91 timesteps (SST); 177 × 87 (chlorophyll), 2024-07-27 → 2026-07-22 |
+| **Training data** | SST: 458 stations × 102 timesteps, 2024-07-27 → 2026-10-13 (NOAA Geo-polar Blended). Chlorophyll: 666 stations × 92 timesteps, 2024-10-07 → 2026-10-05 (NOAA DINEOF gap-filled VIIRS + OLCI). Every 8th calendar day from a fixed anchor |
 | **Holdout** | Final 10 composites, all stations |
 | **Endpoint** | `GET /api/analytics/forecast/ocean-conditions` |
 
 | Variable | Model RMSE | Persistence RMSE | Skill | n_test |
 |---|---|---|---|---|
-| `sst` | 0.5484 °C | 0.5481 °C | **−0.0%** | 4,580 |
-| `chlorophyll_a` | 2.5755 mg/m³ | 3.1219 mg/m³ | **+17.5%** | 1,685 |
+| `sst` | 0.5262 °C | 0.5360 °C | **+1.8%** | 4,580 |
+| `chlorophyll_a` | 2.9758 mg/m³ | 3.0832 mg/m³ | **+3.5%** | 6,607 |
 
-**SST does not beat persistence.** This is a property of the problem: sea
+**SST barely beats persistence.** This is a property of the problem: sea
 surface temperature has large thermal inertia, so over 8 days "no change" is
 very nearly the best available guess without atmospheric forcing and current
 fields, which this dataset does not contain. Modelling the seasonal residual
 instead of the level was tried and scored worse (RMSE 0.565). The endpoint
 returns the skill figure with every forecast so callers see this.
 
-**Chlorophyll genuinely benefits** (+17.5% RMSE) because blooms are episodic
-and persistence degrades sharply across them. Note MAE moves the other way
-(0.530 vs 0.467): the model wins on the large bloom errors that dominate
-RMSE while being slightly worse on typical quiet weeks.
+**Chlorophyll's advantage shrank from +17.5% to +3.5%** when NOAA retired
+the VIIRS-only gap-filled product in 2026 and the data was refreshed onto
+its successor, which adds Sentinel-3A OLCI, a 2 km grid, and gives 666
+stations with data rather than 177. Blooms are still where the model wins
+(RMSE improves while MAE is slightly worse, 0.438 vs 0.421: better on the
+large bloom errors, slightly worse on quiet weeks), but the earlier +17.5%
+should not be quoted for the current data.
 
-*Limitations.* One global model across stations, since 91 points per station
-cannot support per-station fitting. Forecasts are recursive, so error
-compounds with horizon — capped at 10 steps. Chlorophyll covers only 177 of
-458 stations, so many station IDs legitimately return 404.
+*Limitations.* One global model across stations, since ~100 points per
+station cannot support per-station fitting. Forecasts are recursive, so
+error compounds with horizon — capped at 10 steps. SST and chlorophyll sit
+on different grids (5 km vs 2 km products), so a station ID with one
+variable legitimately returns 404 for the other.
 
 ---
 
-## 2. Catch prediction — `catch_hgb_v1`
+## 2. Catch prediction — `catch_hgb_fao_v1`, `catch_hgb_sau_v1`
+
+One model per catch source (`?source=FAO|SAU`, FAO by default). The two
+sources measure different things — FAO is officially reported landings, Sea
+Around Us a reconstruction adding discards and unreported catch — so they
+are never spliced into one series.
 
 | | |
 |---|---|
-| **Task** | Next-year catch tonnage per species per EEZ |
+| **Task** | Catch tonnage per species per region, for the next calendar year (or `target_year`) |
 | **Model** | `HistGradientBoostingRegressor` (400 iters, lr 0.05, depth 6) on `log1p(tonnes)` |
 | **Features** | `lag_1..3`, `roll_mean_3`, `trend_3`, `year_index` (all log space) |
-| **Training data** | Sea Around Us, 110 species-resolved taxa × up to 70 years (1950–2019) |
-| **Holdout** | Final 10 years (995 rows) |
+| **FAO training data** | FAO Global Capture Production (March 2026), 31 species × FAO Areas 51/57, 1950–2024; SAU series pooled into the *training* rows only, cut at the same year |
+| **SAU training data** | Sea Around Us, 110 species × 2 EEZs, 1950–2019 |
+| **Holdout** | Final 10 years of each source, scored on that source only (FAO 508 rows, SAU 995) |
 | **Endpoint** | `GET /api/analytics/predict/catch` |
 
-| Metric | Model | Persistence |
-|---|---|---|
-| RMSE (log-tonnes) | 0.909 | 0.923 |
-| MAE (tonnes) | 3,201 | 2,459 |
-| **Skill** | **+1.5%** | — |
+| Metric | FAO model | FAO persistence | SAU model | SAU persistence |
+|---|---|---|---|---|
+| RMSE (log-tonnes) | 1.292 | 1.352 | 0.906 | 0.923 |
+| MAE (tonnes) | 5,645 | 4,569 | 3,182 | 2,459 |
+| **Skill** | **+4.4%** | — | **+1.8%** | — |
+
+FAO alone (31 species) scored −1.7%, worse than persistence; pooling the
+SAU series into training lifted it to +4.4% on the same FAO-only holdout.
+Leading zeros are dropped from every series: FAO records 0 t for years
+before it reported a species separately (black pomfret appears only from
+2019), which would otherwise read as a jump from nothing.
 
 Marginally better on relative error, **worse on absolute tonnage**. That is
 a direct consequence of the log target: it buys accuracy across the many
@@ -88,11 +107,12 @@ small stocks at the cost of the few large ones that dominate a tonnage-scale
 MAE. Catch is driven by fishing effort, policy and markets that are absent
 from this dataset, so a large gain over persistence was never available.
 
-*Limitations.* SAU's reconstruction ends in 2019. The endpoint forecasts
-the next calendar year (or `target_year`) by rolling the one-step model
-forward recursively from 2019, each predicted year feeding the next as its
-lag — so a 2027 forecast is eight compounded steps from real data, and the
-1-year holdout skill above does not describe its error. The response
+*Limitations.* Neither source reaches the present: FAO ends in 2024, SAU
+in 2019. The endpoint forecasts the next calendar year (or `target_year`)
+by rolling the one-step model forward recursively, each predicted year
+feeding the next as its lag — so a 2027 forecast is three compounded steps
+from FAO's last real year (eight from SAU's), and the 1-year holdout skill
+above does not describe its error. The response
 returns the full year-by-year path and `horizon_years` so this is visible.
 This demonstrates method on real data; it is not an operational forecast.
 Requires ≥6 consecutive annual observations. Species identity is not a
@@ -108,7 +128,7 @@ means); it enters only through each series' own lags.
 | **Task** | Flag marine-heatwave-like and HAB-like excursions |
 | **Method** | Per-station annual harmonic + linear trend; z-score of residuals scaled by MAD |
 | **Threshold** | z ≥ 2.0, banded: 2.0 low · 2.5 medium · 3.0 high · 3.5 critical |
-| **Output** | 1,375 rows in `anomaly_events` (738 SST, 637 chlorophyll) |
+| **Output** | 4,055 rows in `anomaly_events` (1,257 SST, 2,798 chlorophyll), recomputed 2026-10-23 |
 | **Endpoint** | `GET /api/analytics/anomalies` |
 
 Not a learned model, and the strongest component of Phase 4.
@@ -117,7 +137,7 @@ Not a learned model, and the strongest component of Phase 4.
 90th percentile of a 30-year daily climatology. Two years of 8-day
 composites gives two samples per day-of-year — a percentile climatology
 there would be noise wearing a lab coat. Fitting each station's own annual
-harmonic (4 parameters, 91 observations) and scoring the residuals answers
+harmonic (4 parameters, ~100 observations) and scoring the residuals answers
 "unusual *for this place at this time of year*" using only what the data
 supports. The seasonal fit explains a median 36% of variance (max 79%);
 without removing it, every May would register as a heatwave.
@@ -132,12 +152,18 @@ rather than which weeks are unusual.
 
 ### Evidence these are real events, not noise
 
-Detections concentrate on **27 of 91 dates**, and on 2026-04-25 **138
-stations flagged simultaneously**, spanning 6.0–13.5°N and 68.0–89.8°E — a
-basin-wide warm event persisting across five consecutive composites
-(2026-04-09 → 2026-05-11). Statistical noise would spread evenly across all
-91 dates and be spatially scattered. Spatio-temporal coherence at that scale
-is the signature of a genuine oceanographic event.
+SST detections concentrate on **26 of 102 dates**, and on 2026-04-28 **152
+stations flagged simultaneously** — a basin-wide warm event persisting
+across consecutive composites (2026-04-20 → 2026-05-06). Statistical noise
+would spread evenly across all dates and be spatially scattered.
+Spatio-temporal coherence at that scale is the signature of a genuine
+oceanographic event.
+
+A second cluster appears in the newest data (175 stations on 2026-10-05,
+231 on 2026-10-13). Treat it as **unconfirmed**: it sits at the very end of
+the series, where a harmonic-plus-trend fit is least constrained, so it may
+be partly an edge effect. Re-check after the next few refreshes extend the
+series past it.
 
 *Limitations.* Only positive excursions are recorded (`anomaly_events` has
 no direction column, and heatwaves/blooms are the one-sided events of
@@ -152,9 +178,10 @@ normal here.
 
 `GET /api/analytics/anomalies/catch-decline` — OLS slope of tonnage against
 year over each species' last 10 years of record, expressed as % of mean
-catch so small and large stocks are comparable. 78 species scored; the
-steepest declines are Shortbill spearfish (−37.5%/yr), Granular ark
-(−33.4%/yr) and Giant tiger prawn (−31.6%/yr).
+catch so small and large stocks are comparable. Runs on FAO reported
+landings, so the window is 2015–2024. 23 species scored; the steepest
+declines are Unicorn cod (−32.0%/yr), Hilsa shad (−21.6%/yr) and Longtail
+tuna (−10.1%/yr).
 
 Kept separate from `/anomalies` deliberately: this is a multi-year trend in
 annual data, not a point excursion in a satellite series, and merging them

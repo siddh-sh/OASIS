@@ -48,6 +48,7 @@ export interface CatchPrediction {
   /** Years rolled forward from the last real observation to `year`. */
   horizon_years: number
   path: { year: number; predicted_tonnes: number }[]
+  source: 'FAO' | 'SAU'
   skill: ModelSkill
   top_features: FeatureContribution[]
 }
@@ -111,7 +112,7 @@ export const analyticsApi = {
   correlation: (params: { var1: string; var2: string; region?: string }) =>
     apiFetch<CorrelationResult>(`/api/analytics/correlation${toQuery(params)}`),
 
-  predictCatch: (params: { species_id: number; region_id?: number }) =>
+  predictCatch: (params: { species_id: number; region_id?: number; source?: 'FAO' | 'SAU' }) =>
     apiFetch<CatchPrediction>(`/api/analytics/predict/catch${toQuery(params)}`),
 
   forecastOcean: (params: { station_id: number; variable: string; horizon?: number }) =>

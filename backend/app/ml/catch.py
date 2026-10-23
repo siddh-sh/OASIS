@@ -1,8 +1,9 @@
 """Fish-stock / catch prediction (flow.md Phase 4, agent 3).
 
-Predicts next-year catch per species per EEZ from the Sea Around Us
-reconstruction: 110 species-resolved taxa, up to 70 annual observations
-each (1950-2019).
+Predicts catch per species per region from one of two sources, each with
+its own model (see app.ml.features.CATCH_SOURCES): FAO reported landings,
+31 species per FAO fishing area, 1950-2024 (the default); or
+the Sea Around Us reconstruction, 110 taxa per EEZ, 1950-2019.
 
 Design decisions that the real data forced:
 
@@ -24,11 +25,21 @@ Design decisions that the real data forced:
   autocorrelated, so persistence is hard to beat and a model that doesn't
   clear it isn't worth shipping. Both numbers go in the model card.
 
-Measured on the real data (holdout: final 10 years, 995 test rows):
+Measured on the real data (holdout: final 10 years of each source):
 
-    model        RMSE(log) 0.909   MAE 3,201 t
-    persistence  RMSE(log) 0.923   MAE 2,459 t
-    skill vs persistence  +1.5%
+    SAU  model        RMSE(log) 0.906   MAE 3,182 t   (995 test rows)
+         persistence  RMSE(log) 0.923   MAE 2,459 t
+         skill vs persistence  +1.8%
+    FAO  model        RMSE(log) 1.292   MAE 5,645 t   (508 test rows)
+         persistence  RMSE(log) 1.352   MAE 4,569 t
+         skill vs persistence  +4.4%
+
+FAO's series are noisier than SAU's (reported landings jump when national
+reporting changes; SAU smooths that away by reconstruction), which is why
+both its errors and its baseline's are higher. The FAO model is trained
+with SAU's series pooled in (`pool_with`, training rows only): FAO alone
+has 31 species and scored -1.7% — worse than persistence — and pooling
+lifted that to +4.4% on the same FAO-only holdout.
 
 Read that honestly: the model is **marginally** better than persistence on
 relative error, and **worse** on absolute tonnage. That second number is a
@@ -39,12 +50,12 @@ that this dataset does not contain, so a large gain over persistence was
 never realistically available. The endpoint returns both figures so nobody
 has to take the prediction on faith.
 
-The other known weakness, stated rather than buried: the series ends in 2019
-because that is where SAU's reconstruction ends. Forecasts for the coming
-year are produced by rolling the one-step model forward recursively from
-2019, feeding each predicted year back in as the next year's lag — so a
-2027 forecast is eight compounded steps from real data, and its error is
-correspondingly larger than the one-step holdout skill above suggests.
+The other known weakness, stated rather than buried: neither series reaches
+the present (FAO ends in 2024, SAU in 2019). Forecasts for the coming year
+are produced by rolling the one-step model forward recursively, feeding
+each predicted year back in as the next year's lag — so a 2027 forecast is
+three compounded steps from FAO's last real year (eight from SAU's), and
+its error is larger than the one-step holdout skill above suggests.
 The model is a demonstration of method on real data rather than an
 operational predictor.
 """
@@ -59,7 +70,7 @@ from sklearn.ensemble import HistGradientBoostingRegressor
 from sklearn.metrics import mean_absolute_error, mean_squared_error
 from sqlalchemy.orm import Session
 
-from app.ml.features import load_catch_series
+from app.ml.features import DEFAULT_CATCH_SOURCE, load_catch_series
 
 CATCH_FEATURES = ["lag_1", "lag_2", "lag_3", "roll_mean_3", "trend_3", "year_index"]
 DEFAULT_HOLDOUT_YEARS = 10
@@ -95,10 +106,24 @@ def build_features(df: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
-def train(db: Session, holdout_years: int = DEFAULT_HOLDOUT_YEARS) -> CatchModel:
-    raw = load_catch_series(db)
+def train(
+    db: Session,
+    holdout_years: int = DEFAULT_HOLDOUT_YEARS,
+    source: str = DEFAULT_CATCH_SOURCE,
+    pool_with: str | None = None,
+) -> CatchModel:
+    """Fit on `source`, evaluated on a holdout of `source` alone.
+
+    `pool_with` adds another source's series to the *training* rows only.
+    Every feature is a series' own lags, so the sources' different levels
+    never meet inside a row; pooling just gives the model more examples of
+    how a catch series moves year to year. The pooled rows are cut at the
+    same year as the training rows, so no information from the holdout
+    years leaks in through a shared shock (2019's sardine crash is in both).
+    """
+    raw = load_catch_series(db, source=source)
     if raw.empty:
-        raise ValueError("fisheries_catch has no species-resolved rows to train on")
+        raise ValueError(f"fisheries_catch has no species-resolved {source} rows to train on")
 
     data = build_features(raw).dropna(subset=[*CATCH_FEATURES, "log_catch"])
     if data.empty:
@@ -109,6 +134,14 @@ def train(db: Session, holdout_years: int = DEFAULT_HOLDOUT_YEARS) -> CatchModel
     test_df = data[data["year"] > cutoff]
     if train_df.empty or test_df.empty:
         raise ValueError("not enough years of history for the requested holdout")
+
+    if pool_with:
+        extra = load_catch_series(db, source=pool_with)
+        # Offset ids so a species present in both sources stays two series
+        # rather than being interleaved into one by build_features.
+        extra["species_id"] = extra["species_id"] + 10_000_000
+        extra = build_features(extra).dropna(subset=[*CATCH_FEATURES, "log_catch"])
+        train_df = pd.concat([train_df, extra[extra["year"] <= cutoff]], ignore_index=True)
 
     model = HistGradientBoostingRegressor(
         max_iter=400, learning_rate=0.05, max_depth=6, random_state=0
@@ -148,17 +181,18 @@ def predict_next_year(
     species_id: int,
     region_id: int | None = None,
     target_year: int | None = None,
+    source: str = DEFAULT_CATCH_SOURCE,
 ) -> list[dict]:
     """Catch for a species in `target_year` (default: next calendar year),
     per EEZ region it is recorded in.
 
     The model only knows how to step one year past what it has seen, and
-    the record ends in 2019, so reaching a future year means rolling forward
-    recursively: each predicted year becomes the next step's lag_1. Errors
+    the record ends before the present (2024 for FAO, 2019 for SAU), so
+    reaching a future year means rolling forward recursively: each predicted year becomes the next step's lag_1. Errors
     compound with every step, which is why the whole path and the horizon
     are returned rather than just the final number.
     """
-    raw = load_catch_series(db, species_id=species_id)
+    raw = load_catch_series(db, species_id=species_id, source=source)
     if raw.empty:
         return []
     if region_id is not None:

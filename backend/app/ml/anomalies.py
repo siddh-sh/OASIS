@@ -233,3 +233,14 @@ def run_all(db: Session) -> dict[str, int]:
         detections = detect_ocean_anomalies(db, variable)
         counts[variable] = persist_ocean_anomalies(db, detections)
     return counts
+
+
+if __name__ == "__main__":
+    # `python -m app.ml.anomalies` from backend/ — run by the daily refresh
+    # workflow after new satellite data is loaded.
+    from app.db.session import SessionLocal
+
+    if SessionLocal is None:
+        raise SystemExit("DATABASE_URL not configured")
+    with SessionLocal() as session:
+        print(run_all(session))

@@ -24,7 +24,7 @@ from app.ml.anomalies import detect_catch_decline
 from app.ml.catch import CATCH_FEATURES, predict_next_year
 from app.ml.correlation import available_variables, correlate
 from app.ml.explain import attribute, load_explanation, store_prediction
-from app.ml.features import STEP_DAYS
+from app.ml.features import DEFAULT_CATCH_SOURCE, STEP_DAYS
 from app.ml.forecast import forecast_station
 from app.schemas.analytics import (
     AnomalyEventOut,
@@ -54,7 +54,12 @@ def predict_catch(
         default=None,
         ge=2020,
         le=2040,
-        description="Year to forecast; defaults to next calendar year. Rolled forward from 2019, the last year of data.",
+        description="Year to forecast; defaults to next calendar year. Rolled forward from the source's last year of data.",
+    ),
+    source: str = Query(
+        default=DEFAULT_CATCH_SOURCE,
+        pattern="^(FAO|SAU)$",
+        description="FAO (reported landings, to 2024) | SAU (reconstructed catch, to 2019)",
     ),
     db: Session = Depends(get_db),
 ):
@@ -63,12 +68,12 @@ def predict_catch(
     The prediction is persisted to `ml_predictions` and the returned
     `prediction_id` resolves via `/explain/{prediction_id}`.
     """
-    model = registry.get_catch_model(db)
-    results = predict_next_year(db, model, species_id, region_id, target_year)
+    model = registry.get_catch_model(db, source)
+    results = predict_next_year(db, model, species_id, region_id, target_year, source)
     if not results:
         raise HTTPException(
             404,
-            f"no catch history usable for species_id={species_id}"
+            f"no {source} catch history usable for species_id={species_id}"
             + (f" in region_id={region_id}" if region_id is not None else "")
             + " — needs at least 6 consecutive annual observations",
         )
@@ -79,9 +84,12 @@ def predict_catch(
 
     prediction_id = store_prediction(
         db,
-        model_name="catch_hgb_v1",
+        model_name=f"catch_hgb_{source.lower()}_v1",
         target_type="catch_tonnes",
-        input_ref=f"species={result['species_id']};region={result['region_id']};year={result['year']}",
+        input_ref=(
+            f"species={result['species_id']};region={result['region_id']};"
+            f"year={result['year']};source={source}"
+        ),
         predicted_value=result["predicted_tonnes"],
         confidence=model.metrics["skill_vs_persistence"],
         shap_payload=explanation,
@@ -96,6 +104,7 @@ def predict_catch(
         last_observed_year=result["last_observed_year"],
         last_observed_tonnes=result["last_observed_tonnes"],
         horizon_years=result["horizon_years"],
+        source=source,
         path=result["path"],
         skill=ModelSkill(
             rmse=model.metrics["rmse_log"],

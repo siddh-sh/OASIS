@@ -26,7 +26,11 @@ INDIA_BBOX_WKT = "POLYGON((68 6,90 6,90 23,68 23,68 6))"
 
 BASE_URL = "https://api.obis.org/v3/occurrence"
 PAGE_SIZE = 300
-MAX_RECORDS = 6000  # Week-1 volume cap per plan §16.3/16.4
+# Volume cap per plan §16.3/16.4 — applied to the *newest* records. OBIS
+# pages by record id, not date, so stopping after the first 6,000 returned
+# (as this originally did) kept an arbitrary slice of the window; the
+# window holds ~24,000, so all are fetched and the most recent kept.
+MAX_RECORDS = 6000
 
 FIELDS = [
     "scientificName",
@@ -82,7 +86,7 @@ def main():
     all_records = []
     after = None
     page = 0
-    while len(all_records) < MAX_RECORDS:
+    while True:
         page += 1
         print(f"Fetching OBIS page {page} (after={after}) ...")
         data = fetch_page(after)
@@ -96,6 +100,10 @@ def main():
         if len(results) < PAGE_SIZE:
             break
 
+    # eventDate can be a range ("2025-03-01/2025-03-05"); its start sorts
+    # correctly as an ISO string. Undated records go last.
+    all_records.sort(key=lambda r: (r.get("eventDate") or "")[:10], reverse=True)
+    print(f"Fetched {len(all_records):,} in window; keeping newest {MAX_RECORDS:,}")
     all_records = all_records[:MAX_RECORDS]
 
     raw_path = OUT_DIR / "obis_raw.json"

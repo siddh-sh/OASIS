@@ -44,6 +44,7 @@ RAW = ROOT / "data-pipeline" / "seeds" / "raw"
 sys.path.insert(0, str(ROOT / "data-pipeline" / "collectors"))
 from open_meteo import ANCHOR_POINTS  # noqa: E402  single source of truth for coastal stations
 from sea_around_us import SAU_REGIONS  # noqa: E402  single source of truth for the Indian EEZs
+from fao_capture import FAO_AREAS  # noqa: E402  single source of truth for India's FAO fishing areas
 
 BATCH = 5000
 
@@ -117,14 +118,24 @@ def insert(cur, sql, rows, label):
 
 # ----------------------------------------------------------------- loaders
 
+def is_fao_species(name):
+    """FAO's scientific names include group labels a word-count check lets
+    through ("Caranx spp", "Sepiidae, Sepiolidae", "Clupeiformes
+    (=Clupeoidei)"). Only a plain "Genus species" binomial is a species."""
+    parts = (name or "").split()
+    return (len(parts) == 2 and parts[0].isalpha() and parts[0][0].isupper()
+            and parts[1].isalpha() and parts[1].islower() and parts[1] not in ("spp", "sp"))
+
+
 def load_regions(cur):
     # Coastal states (from the weather anchor points), plus open ocean for
-    # buoys/satellite cells, plus the two Sea Around Us EEZs that fisheries
-    # catch is reported against. EEZs have no `state` — they are maritime
-    # zones, not administrative divisions.
+    # buoys/satellite cells, plus the two Sea Around Us EEZs and two FAO
+    # fishing areas that fisheries catch is reported against. Neither has a
+    # `state` — they are maritime zones, not administrative divisions.
     names = sorted({state for state, *_ in ANCHOR_POINTS}) + [OPEN_OCEAN]
     rows = [(n, n if n != OPEN_OCEAN else None) for n in names]
     rows += [(eez_name, None) for _, eez_name in SAU_REGIONS]
+    rows += [(area_name, None) for _, area_name in FAO_AREAS]
     insert(cur,
            "insert into regions (name, state) values %s on conflict (name) do nothing",
            rows, "regions")
@@ -210,7 +221,11 @@ def load_stations(cur, regions):
 def load_ocean_readings(cur, stations):
     specs = [
         ("sst_india.csv", "analysed_sst", "sst", "NOAA-BLENDED-SST"),
-        ("chlorophyll_india.csv", "chlor_a", "chlorophyll_a", "NOAA-VIIRS-CHLA"),
+        # NOAA-DINEOF-CHLA replaced NOAA-VIIRS-CHLA in Oct 2026 when NOAA retired
+        # the VIIRS-only product (see collectors/noaa_erddap.py). A different
+        # product, so a different source key; the old rows were removed
+        # rather than left to interleave with the new series.
+        ("chlorophyll_india.csv", "chlor_a", "chlorophyll_a", "NOAA-DINEOF-CHLA"),
     ]
     for fname, col, target, source in specs:
         rows = []
@@ -300,6 +315,16 @@ def load_species(cur):
     for r in read_csv(RAW / "fisheries" / "fisheries_catch_sau.csv"):
         name = clean_str(r.get("scientific_name"))
         if not name or len(name.split()) < 2:
+            continue
+        entry = merged.setdefault(name, {})
+        if not entry.get("common_name"):
+            entry["common_name"] = clean_str(r.get("common_name"))
+
+    # FAO capture: same idea — binomials only (FAO's "nei" groups such as
+    # "Marine fishes nei" are not species), with FAO's English name.
+    for r in read_csv(RAW / "fisheries" / "fisheries_catch_fao.csv"):
+        name = clean_str(r.get("scientific_name"))
+        if not is_fao_species(name):
             continue
         entry = merged.setdefault(name, {})
         if not entry.get("common_name"):
@@ -412,6 +437,42 @@ def load_fisheries_catch(cur, regions, species):
            rows, "fisheries_catch [SAU]")
 
 
+def load_fisheries_catch_fao(cur, regions, species):
+    """Species-resolved reported landings from FAO Global Capture Production,
+    1950 to ~18 months before present (see collectors/fao_capture.py).
+
+    Stored in fisheries_catch next to SAU under source 'FAO'. The two are
+    different measurements (reported landings vs. reconstructed total
+    extraction) and every reader filters on `source`; they are never summed.
+
+    As with SAU, species_id is NULL for FAO's higher-rank "nei" groups, which
+    are kept so totals aren't biased downward. FAO reports tonnes; x1000.
+    """
+    rows = []
+    for r in read_csv(RAW / "fisheries" / "fisheries_catch_fao.csv"):
+        tonnes = num(r.get("catch_tonnes"))
+        year = num(r.get("year"))
+        area = clean_str(r.get("area_code"))
+        code = clean_str(r.get("species_code"))
+        if tonnes is None or year is None or not area or not code:
+            continue
+        sci = clean_str(r.get("scientific_name"))
+        rows.append((
+            species.get(sci) if is_fao_species(sci) else None,
+            regions.get(clean_str(r.get("region_name"))),
+            datetime(int(year), 1, 1).date(),   # annual grain -> Jan 1 of the year
+            tonnes * 1000,
+            None,
+            "FAO",
+            f"{area}:{code}:{int(year)}",
+        ))
+    insert(cur,
+           "insert into fisheries_catch (species_id, region_id, catch_date, "
+           "catch_weight_kg, gear_type, source, external_id) values %s "
+           "on conflict (source, external_id) do nothing",
+           rows, "fisheries_catch [FAO]")
+
+
 def load_molecular(cur, species):
     rows = []
     for r in read_csv(RAW / "molecular" / "molecular_records_bold.csv"):
@@ -454,7 +515,7 @@ def record_metadata(cur):
     cur.execute("delete from datasets_metadata")
     rows = [
         ("NOAA-BLENDED-SST", "satellite", "NOAA / public domain"),
-        ("NOAA-VIIRS-CHLA", "satellite", "NOAA / public domain"),
+        ("NOAA-DINEOF-CHLA", "satellite", "NOAA / public domain"),
         ("NOAA-PMEL-RAMA", "sensor", "NOAA PMEL / public domain"),
         ("Open-Meteo", "weather", "CC-BY 4.0"),
         ("OBIS", "biodiversity", "CC-BY 4.0"),
@@ -463,6 +524,7 @@ def record_metadata(cur):
         # The project's only non-permissive source: non-commercial + share-alike.
         # Cite per https://seaaroundus.org/citation-policy/
         ("SAU", "fisheries", "CC-BY-NC-SA 4.0"),
+        ("FAO", "fisheries", "CC-BY 4.0"),
         ("BOLD", "genomics", "BOLD terms of use"),
         # Simplified state boundaries only (see load_region_boundaries) --
         # illustrative, not surveyed cartography.
@@ -496,6 +558,9 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--truncate", action="store_true",
                     help="wipe all data first (schema is kept)")
+    ap.add_argument("--only-fao-catch", action="store_true",
+                    help="load just the FAO species catch (plus the regions and "
+                         "species it references) into an existing database")
     args = ap.parse_args()
 
     conn = connect()
@@ -510,6 +575,14 @@ def main():
                     "restart identity cascade")
                 print("Truncated existing data.\n")
 
+            if args.only_fao_catch:
+                load_fisheries_catch_fao(cur, load_regions(cur), load_species(cur))
+                cur.execute("insert into datasets_metadata (source_name, dataset_type, license, "
+                            "last_synced_at) select 'FAO', 'fisheries', 'CC-BY 4.0', now() "
+                            "where not exists (select 1 from datasets_metadata where source_name = 'FAO')")
+                conn.commit()
+                return
+
             print("Loading reference data ...")
             regions = load_regions(cur)
             load_region_boundaries(cur)
@@ -523,6 +596,7 @@ def main():
             load_occurrences(cur, species)
             load_fisheries(cur)
             load_fisheries_catch(cur, regions, species)
+            load_fisheries_catch_fao(cur, regions, species)
             load_molecular(cur, species)
 
             print("\nPost-processing ...")
