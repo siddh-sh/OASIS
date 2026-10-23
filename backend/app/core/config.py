@@ -33,7 +33,7 @@ class Settings(BaseSettings):
     llm_provider: str = "groq"
     llm_api_key: str = ""
     llm_base_url: str = "https://api.groq.com/openai/v1"
-    llm_model: str = "llama-3.3-70b-versatile"
+    llm_model: str = "openai/gpt-oss-120b"
 
     # CORS: local Vite dev origin always allowed; add the deployed Vercel
     # origin via this env var once known (comma-separated).

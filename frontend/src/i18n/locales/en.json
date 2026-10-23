@@ -30,7 +30,35 @@
     "password": "Password",
     "working": "Working…",
     "logInButton": "Log in",
-    "signUpButton": "Sign up"
+    "signUpButton": "Sign up",
+    "emailInvalid": "Enter a valid email address, like name@gmail.com.",
+    "emailDidYouMean": "That domain looks mistyped. Did you mean",
+    "forgotPassword": "Forgot password?",
+    "forgotTitle": "Reset your password",
+    "forgotHelp": "Enter your account email and we'll send you a link to set a new password.",
+    "sendResetLink": "Send reset link",
+    "resetSent": "If an account exists for that email, a reset link is on its way. Check your inbox (and spam folder).",
+    "backToLogin": "Back to login",
+    "resetTitle": "Set a new password",
+    "newPassword": "New password",
+    "confirmPassword": "Confirm new password",
+    "passwordsDontMatch": "Passwords don't match.",
+    "setNewPassword": "Update password",
+    "resetDone": "Your password has been updated. You can now log in with it.",
+    "resetLinkInvalid": "This reset link is invalid or has expired. Request a new one from the login page."
+  },
+  "password": {
+    "requirements": "Password requirements",
+    "met": "met",
+    "notMet": "not met",
+    "rules": {
+      "minLength": "At least 8 characters",
+      "uppercase": "One uppercase letter (A–Z)",
+      "lowercase": "One lowercase letter (a–z)",
+      "number": "One number (0–9)",
+      "special": "One special character (e.g. ! @ # $ %)",
+      "noSpaces": "No spaces, at most 72 characters"
+    }
   },
   "pages": {
     "dashboard": { "title": "Dashboard", "subtitle": "Overview across all six data domains" },

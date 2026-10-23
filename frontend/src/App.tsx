@@ -11,6 +11,7 @@ import { FisheriesPage } from '@/pages/FisheriesPage'
 import { LoginPage } from '@/pages/LoginPage'
 import { MolecularPage } from '@/pages/MolecularPage'
 import { OceanExplorerPage } from '@/pages/OceanExplorerPage'
+import { ResetPasswordPage } from '@/pages/ResetPasswordPage'
 import { RiskAlertsPage } from '@/pages/RiskAlertsPage'
 import { SettingsPage } from '@/pages/SettingsPage'
 import { SpeciesExplorerPage } from '@/pages/SpeciesExplorerPage'
@@ -36,6 +37,7 @@ function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/reset-password" element={<ResetPasswordPage />} />
       <Route path="/" element={<Navigate to="/dashboard" replace />} />
 
       <Route

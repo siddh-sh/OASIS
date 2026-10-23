@@ -6,8 +6,9 @@ whole agent layer talks to `ChatOpenAI` and the provider is three settings
 (`LLM_BASE_URL`, `LLM_MODEL`, `LLM_API_KEY`) rather than a code change. If
 Groq rate-limits during a demo, switching to Cerebras is an .env edit.
 
-Verified against Groq's `llama-3.3-70b-versatile`: chat completions ~0.85 s
-round trip, and — critically — native tool calling works, which is what the
+Verified against Groq's `openai/gpt-oss-120b` (llama-3.3-70b-versatile was
+retired from Groq): chat completions return in about a
+second, and — critically — native tool calling works, which is what the
 coordinator depends on.
 """
 from __future__ import annotations

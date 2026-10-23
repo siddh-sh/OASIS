@@ -16,16 +16,37 @@ interface AuthState {
   fetchProfile: () => Promise<void>
 }
 
+// FastAPI's 422s carry `detail` as a list of {msg} objects, not a string.
+function errorDetail(detail: unknown): string | undefined {
+  if (typeof detail === 'string') return detail
+  if (Array.isArray(detail)) {
+    return detail.map((d) => String(d?.msg ?? d).replace(/^Value error, /, '')).join('; ')
+  }
+  return undefined
+}
+
 async function authPost<T>(path: string, body: unknown, token?: string): Promise<T> {
   const headers = new Headers({ 'Content-Type': 'application/json' })
   if (token) headers.set('Authorization', `Bearer ${token}`)
   const res = await fetch(`${BASE_URL}${path}`, { method: 'POST', headers, body: JSON.stringify(body) })
   if (!res.ok) {
     const data = await res.json().catch(() => ({}))
-    throw new Error(data.detail ?? `${path} failed (${res.status})`)
+    throw new Error(errorDetail(data.detail) ?? `${path} failed (${res.status})`)
   }
   if (res.status === 204) return undefined as T
   return res.json() as Promise<T>
+}
+
+// Neither of these touches the session, so they live outside the store.
+export function requestPasswordReset(email: string): Promise<{ message: string }> {
+  return authPost('/auth/forgot-password', {
+    email,
+    redirect_to: `${window.location.origin}/reset-password`,
+  })
+}
+
+export function resetPassword(recoveryToken: string, password: string): Promise<{ message: string }> {
+  return authPost('/auth/reset-password', { access_token: recoveryToken, password })
 }
 
 export const useAuthStore = create<AuthState>()(
