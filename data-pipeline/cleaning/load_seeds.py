@@ -118,10 +118,12 @@ def insert(cur, sql, rows, label):
 
 # ----------------------------------------------------------------- loaders
 
-def is_fao_species(name):
-    """FAO's scientific names include group labels a word-count check lets
-    through ("Caranx spp", "Sepiidae, Sepiolidae", "Clupeiformes
-    (=Clupeoidei)"). Only a plain "Genus species" binomial is a species."""
+def is_binomial(name):
+    """Both catch sources mix group labels in with species names, and a
+    word-count check lets them through: FAO ("Caranx spp", "Sepiidae,
+    Sepiolidae", "Clupeiformes (=Clupeoidei)") and SAU ("Miscellaneous
+    marine crustaceans"). Only a plain "Genus species" binomial is a
+    species."""
     parts = (name or "").split()
     return (len(parts) == 2 and parts[0].isalpha() and parts[0][0].isupper()
             and parts[1].isalpha() and parts[1].islower() and parts[1] not in ("spp", "sp"))
@@ -314,7 +316,7 @@ def load_species(cur):
     # order-level aggregates (Penaeidae, Decapoda) that are not species.
     for r in read_csv(RAW / "fisheries" / "fisheries_catch_sau.csv"):
         name = clean_str(r.get("scientific_name"))
-        if not name or len(name.split()) < 2:
+        if not is_binomial(name):
             continue
         entry = merged.setdefault(name, {})
         if not entry.get("common_name"):
@@ -324,7 +326,7 @@ def load_species(cur):
     # "Marine fishes nei" are not species), with FAO's English name.
     for r in read_csv(RAW / "fisheries" / "fisheries_catch_fao.csv"):
         name = clean_str(r.get("scientific_name"))
-        if not is_fao_species(name):
+        if not is_binomial(name):
             continue
         entry = merged.setdefault(name, {})
         if not entry.get("common_name"):
@@ -422,7 +424,7 @@ def load_fisheries_catch(cur, regions, species):
             entity = "other-" + common.lower().replace(" ", "-")
         sci = clean_str(r.get("scientific_name"))
         rows.append((
-            species.get(sci) if sci and len(sci.split()) >= 2 else None,
+            species.get(sci) if is_binomial(sci) else None,
             regions.get(clean_str(r.get("region_name"))),
             datetime(int(year), 1, 1).date(),   # annual grain -> Jan 1 of the year
             tonnes * 1000,
@@ -458,7 +460,7 @@ def load_fisheries_catch_fao(cur, regions, species):
             continue
         sci = clean_str(r.get("scientific_name"))
         rows.append((
-            species.get(sci) if is_fao_species(sci) else None,
+            species.get(sci) if is_binomial(sci) else None,
             regions.get(clean_str(r.get("region_name"))),
             datetime(int(year), 1, 1).date(),   # annual grain -> Jan 1 of the year
             tonnes * 1000,

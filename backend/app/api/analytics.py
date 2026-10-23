@@ -54,7 +54,10 @@ def predict_catch(
         default=None,
         ge=2020,
         le=2040,
-        description="Year to forecast; defaults to next calendar year. Rolled forward from the source's last year of data.",
+        description=(
+            "Year to forecast; defaults to next calendar year. "
+            "Rolled forward from the source's last year of data."
+        ),
     ),
     source: str = Query(
         default=DEFAULT_CATCH_SOURCE,

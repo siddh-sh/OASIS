@@ -43,7 +43,7 @@ class FisheriesSummaryOut(BaseModel):
     granular_catch: list[FisheriesCatchOut]
     granular_catch_note: str = (
         "Granular catch is Sea Around Us reconstructed catch by taxon and "
-        "year for the Indian EEZs (14,214 rows, 1950-2019, 110 species "
+        "year for the Indian EEZs (14,214 rows, 1950-2019, 108 species "
         "resolved). It is not comparable with the national totals above: FAO "
         "reports official landings, SAU reconstructs total extraction "
         "including estimated discards and unreported catch. Licensed "

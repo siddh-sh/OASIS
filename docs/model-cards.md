@@ -6,8 +6,8 @@ holdout, and is reproducible with `python -m app.ml.registry` from
 than omitted.
 
 **The honest headline:** of the three predictive models, one earns its keep
-none clearly earns its keep: chlorophyll forecasting +3.5%, catch +4.4% on
-FAO data / +1.8% on Sea Around Us, SST forecasting +1.8% — all small margins
+none clearly earns its keep: chlorophyll forecasting +3.5%, catch +5.0% on
+FAO data / +1.3% on Sea Around Us, SST forecasting +1.8% — all small margins
 over the trivial baseline. (Chlorophyll scored +17.5% on NOAA's retired
 VIIRS-only product; on its replacement, refreshed October 2026, it does not
 reproduce — see §1.) The
@@ -85,18 +85,18 @@ are never spliced into one series.
 | **Model** | `HistGradientBoostingRegressor` (400 iters, lr 0.05, depth 6) on `log1p(tonnes)` |
 | **Features** | `lag_1..3`, `roll_mean_3`, `trend_3`, `year_index` (all log space) |
 | **FAO training data** | FAO Global Capture Production (March 2026), 31 species × FAO Areas 51/57, 1950–2024; SAU series pooled into the *training* rows only, cut at the same year |
-| **SAU training data** | Sea Around Us, 110 species × 2 EEZs, 1950–2019 |
-| **Holdout** | Final 10 years of each source, scored on that source only (FAO 508 rows, SAU 995) |
+| **SAU training data** | Sea Around Us, 108 species × 2 EEZs, 1950–2019 |
+| **Holdout** | Final 10 years of each source, scored on that source only (FAO 508 rows, SAU 986) |
 | **Endpoint** | `GET /api/analytics/predict/catch` |
 
 | Metric | FAO model | FAO persistence | SAU model | SAU persistence |
 |---|---|---|---|---|
-| RMSE (log-tonnes) | 1.292 | 1.352 | 0.906 | 0.923 |
-| MAE (tonnes) | 5,645 | 4,569 | 3,182 | 2,459 |
-| **Skill** | **+4.4%** | — | **+1.8%** | — |
+| RMSE (log-tonnes) | 1.284 | 1.352 | 0.907 | 0.919 |
+| MAE (tonnes) | 5,844 | 4,569 | 3,261 | 2,481 |
+| **Skill** | **+5.0%** | — | **+1.3%** | — |
 
 FAO alone (31 species) scored −1.7%, worse than persistence; pooling the
-SAU series into training lifted it to +4.4% on the same FAO-only holdout.
+SAU series into training lifted it to +5.0% on the same FAO-only holdout.
 Leading zeros are dropped from every series: FAO records 0 t for years
 before it reported a species separately (black pomfret appears only from
 2019), which would otherwise read as a jump from nothing.

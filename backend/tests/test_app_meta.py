@@ -1,6 +1,8 @@
 """Structural tests that don't need a DB: the app boots, every endpoint
 from flow.md §11 is registered, and OpenAPI docs generate cleanly."""
 
+from app.core.config import get_settings
+
 EXPECTED_PATHS = {
     "/health",
     "/auth/signup",
@@ -46,13 +48,19 @@ def test_openapi_schema_has_every_planned_endpoint(client):
     assert not missing, f"missing routes: {missing}"
 
 
+# Without a database (as in CI) the get_db dependency answers 503 before
+# FastAPI reports request-validation errors, so a malformed call is a 503
+# there and a 422 locally. Either way it is not the old 501 stub.
+_INVALID_REQUEST = 422 if get_settings().database_url else 503
+
+
 def test_phase4_analytics_endpoints_are_no_longer_stubs(client):
-    # predict/catch now requires species_id, so a bare call is a 422 from
-    # validation rather than the old 501. Anything but 501 proves the stub
-    # is gone; the real behaviour is covered in test_analytics_live.py.
+    # predict/catch now requires species_id, so a bare call fails validation
+    # rather than hitting the old 501. Anything but 501 proves the stub is
+    # gone; the real behaviour is covered in test_analytics_live.py.
     resp = client.get("/api/analytics/predict/catch")
     assert resp.status_code != 501, "Phase 4 should have replaced this stub"
-    assert resp.status_code == 422
+    assert resp.status_code == _INVALID_REQUEST
 
 
 def test_remaining_stub_is_session_export_only(client):
@@ -65,7 +73,7 @@ def test_remaining_stub_is_session_export_only(client):
 def test_phase5_agent_endpoints_are_no_longer_stubs(client):
     # /chat needs a body, so a malformed request is a 422 and a valid one is
     # 200 (or 503 with no LLM key configured) — but never 501 again.
-    assert client.post("/api/agent/chat", json={}).status_code == 422
+    assert client.post("/api/agent/chat", json={}).status_code == _INVALID_REQUEST
     assert client.get("/api/analytics/recommendation/999999999").status_code in (404, 503)
 
 

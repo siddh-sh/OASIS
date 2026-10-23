@@ -15,7 +15,7 @@ Shape of the real data these are designed against (verified, not assumed):
     2024-10-07 to 2026-10-05 (NOAA DINEOF gap-filled product).
   * `fisheries_catch` — two separate species-level catch sources, told
     apart by `source` and never summed (see CATCH_SOURCES): Sea Around Us,
-    110 species, 1950-2019; FAO capture, 31 species, 1950-2024.
+    108 species, 1950-2019; FAO capture, 31 species, 1950-2024.
 
 **Two years is the binding constraint on anything seasonal.** A real marine
 heatwave definition (Hobday et al.) uses a 30-year daily climatology; with

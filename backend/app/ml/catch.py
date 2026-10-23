@@ -3,7 +3,7 @@
 Predicts catch per species per region from one of two sources, each with
 its own model (see app.ml.features.CATCH_SOURCES): FAO reported landings,
 31 species per FAO fishing area, 1950-2024 (the default); or
-the Sea Around Us reconstruction, 110 taxa per EEZ, 1950-2019.
+the Sea Around Us reconstruction, 108 species per EEZ, 1950-2019.
 
 Design decisions that the real data forced:
 
@@ -27,19 +27,19 @@ Design decisions that the real data forced:
 
 Measured on the real data (holdout: final 10 years of each source):
 
-    SAU  model        RMSE(log) 0.906   MAE 3,182 t   (995 test rows)
-         persistence  RMSE(log) 0.923   MAE 2,459 t
-         skill vs persistence  +1.8%
-    FAO  model        RMSE(log) 1.292   MAE 5,645 t   (508 test rows)
+    SAU  model        RMSE(log) 0.907   MAE 3,261 t   (986 test rows)
+         persistence  RMSE(log) 0.919   MAE 2,481 t
+         skill vs persistence  +1.3%
+    FAO  model        RMSE(log) 1.284   MAE 5,844 t   (508 test rows)
          persistence  RMSE(log) 1.352   MAE 4,569 t
-         skill vs persistence  +4.4%
+         skill vs persistence  +5.0%
 
 FAO's series are noisier than SAU's (reported landings jump when national
 reporting changes; SAU smooths that away by reconstruction), which is why
 both its errors and its baseline's are higher. The FAO model is trained
 with SAU's series pooled in (`pool_with`, training rows only): FAO alone
 has 31 species and scored -1.7% — worse than persistence — and pooling
-lifted that to +4.4% on the same FAO-only holdout.
+lifted that to +5.0% on the same FAO-only holdout.
 
 Read that honestly: the model is **marginally** better than persistence on
 relative error, and **worse** on absolute tonnage. That second number is a
