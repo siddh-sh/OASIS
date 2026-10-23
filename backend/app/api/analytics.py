@@ -50,15 +50,21 @@ _SKILL_NOTE = (
 def predict_catch(
     species_id: int = Query(description="species_id with Sea Around Us catch history"),
     region_id: int | None = Query(default=None, description="EEZ region; omit for the first available"),
+    target_year: int | None = Query(
+        default=None,
+        ge=2020,
+        le=2040,
+        description="Year to forecast; defaults to next calendar year. Rolled forward from 2019, the last year of data.",
+    ),
     db: Session = Depends(get_db),
 ):
-    """Next-year catch for a species, with SHAP attribution.
+    """Catch for a species in a future year, with SHAP attribution.
 
     The prediction is persisted to `ml_predictions` and the returned
     `prediction_id` resolves via `/explain/{prediction_id}`.
     """
     model = registry.get_catch_model(db)
-    results = predict_next_year(db, model, species_id, region_id)
+    results = predict_next_year(db, model, species_id, region_id, target_year)
     if not results:
         raise HTTPException(
             404,
@@ -87,7 +93,10 @@ def predict_catch(
         region_id=result["region_id"],
         year=result["year"],
         predicted_tonnes=result["predicted_tonnes"],
+        last_observed_year=result["last_observed_year"],
         last_observed_tonnes=result["last_observed_tonnes"],
+        horizon_years=result["horizon_years"],
+        path=result["path"],
         skill=ModelSkill(
             rmse=model.metrics["rmse_log"],
             baseline_rmse=model.metrics["baseline_rmse_log"],

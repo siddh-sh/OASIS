@@ -56,13 +56,23 @@ class FeatureContribution(BaseModel):
     direction: str
 
 
+class CatchForecastPoint(BaseModel):
+    year: int
+    predicted_tonnes: float
+
+
 class CatchPredictionOut(BaseModel):
     prediction_id: int
     species_id: int
     region_id: int
     year: int
     predicted_tonnes: float
+    last_observed_year: int
     last_observed_tonnes: float
+    # Years rolled forward from the last real observation to `year`; the
+    # holdout skill below only describes a 1-year horizon.
+    horizon_years: int
+    path: list[CatchForecastPoint]
     skill: ModelSkill
     top_features: list[FeatureContribution]
 

@@ -43,7 +43,11 @@ export interface CatchPrediction {
   region_id: number
   year: number
   predicted_tonnes: number
+  last_observed_year: number
   last_observed_tonnes: number
+  /** Years rolled forward from the last real observation to `year`. */
+  horizon_years: number
+  path: { year: number; predicted_tonnes: number }[]
   skill: ModelSkill
   top_features: FeatureContribution[]
 }

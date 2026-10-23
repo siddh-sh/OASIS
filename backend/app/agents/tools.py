@@ -206,7 +206,7 @@ def build_tools(db: Session) -> list[StructuredTool]:
         return int(hits[0]["source_id"]) if hits and hits[0]["source_table"] == "species" else None
 
     def predict_catch(species_id: int | None = None, species_name: str | None = None) -> dict:
-        """Next-year catch tonnage for a species, with the drivers behind it.
+        """Catch tonnage forecast for a species for next calendar year.
         Pass species_name (e.g. 'Indian oil sardine') OR species_id — not both."""
         species_id = _resolve_species(species_id, species_name)
         if species_id is None:
@@ -219,9 +219,13 @@ def build_tools(db: Session) -> list[StructuredTool]:
         return {
             "species_id": r["species_id"], "year": r["year"],
             "predicted_tonnes": round(r["predicted_tonnes"], 1),
+            "last_observed_year": r["last_observed_year"],
             "last_observed_tonnes": round(r["last_observed_tonnes"], 1),
             "skill_vs_persistence": round(model.metrics["skill_vs_persistence"], 3),
-            "caveat": "Sea Around Us data ends in 2019, so this is a historical-method demo, not a live forecast.",
+            "caveat": (
+                f"Sea Around Us data ends in {r['last_observed_year']}; this forecast is rolled forward "
+                f"{r['horizon_years']} years from there, so uncertainty is much larger than the 1-year skill implies."
+            ),
         }
 
     def catch_history(species_id: int | None = None, species_name: str | None = None) -> dict:

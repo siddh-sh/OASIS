@@ -40,13 +40,18 @@ never realistically available. The endpoint returns both figures so nobody
 has to take the prediction on faith.
 
 The other known weakness, stated rather than buried: the series ends in 2019
-because that is where SAU's reconstruction ends, so "next year" means 2020,
-not a live forecast. This is a historical dataset, and the model is a
-demonstration of method on real data rather than an operational predictor.
+because that is where SAU's reconstruction ends. Forecasts for the coming
+year are produced by rolling the one-step model forward recursively from
+2019, feeding each predicted year back in as the next year's lag — so a
+2027 forecast is eight compounded steps from real data, and its error is
+correspondingly larger than the one-step holdout skill above suggests.
+The model is a demonstration of method on real data rather than an
+operational predictor.
 """
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import date
 
 import numpy as np
 import pandas as pd
@@ -132,10 +137,27 @@ def train(db: Session, holdout_years: int = DEFAULT_HOLDOUT_YEARS) -> CatchModel
     return CatchModel(model=model, metrics=metrics, n_train=len(train_df), n_test=len(test_df))
 
 
+def default_target_year() -> int:
+    """Next calendar year: the forecast a user means by "next year"."""
+    return date.today().year + 1
+
+
 def predict_next_year(
-    db: Session, fitted: CatchModel, species_id: int, region_id: int | None = None
+    db: Session,
+    fitted: CatchModel,
+    species_id: int,
+    region_id: int | None = None,
+    target_year: int | None = None,
 ) -> list[dict]:
-    """One-year-ahead catch for a species, per EEZ region it is recorded in."""
+    """Catch for a species in `target_year` (default: next calendar year),
+    per EEZ region it is recorded in.
+
+    The model only knows how to step one year past what it has seen, and
+    the record ends in 2019, so reaching a future year means rolling forward
+    recursively: each predicted year becomes the next step's lag_1. Errors
+    compound with every step, which is why the whole path and the horizon
+    are returned rather than just the final number.
+    """
     raw = load_catch_series(db, species_id=species_id)
     if raw.empty:
         return []
@@ -151,25 +173,43 @@ def predict_next_year(
         g = g.sort_values("year")
         if len(g) < MIN_HISTORY:
             continue
-        last = g.iloc[[-1]]
-        # Advance one year: this year's values become next year's lags.
-        row = pd.DataFrame([{
-            "lag_1": float(last["log_catch"].iloc[0]),
-            "lag_2": float(last["lag_1"].iloc[0]),
-            "lag_3": float(last["lag_2"].iloc[0]),
-            "roll_mean_3": float(g["log_catch"].tail(3).mean()),
-            "trend_3": float(last["log_catch"].iloc[0] - last["lag_2"].iloc[0]),
-            "year_index": float(last["year_index"].iloc[0] + 1),
-        }])
-        if row.isna().to_numpy().any():
+        last = g.iloc[-1]
+        last_year = int(last["year"])
+        steps = max(1, (target_year or default_target_year()) - last_year)
+
+        # Most recent first: history[0] is lag_1 for the step being predicted.
+        history = list(g["log_catch"].iloc[::-1][:3])
+        year_index = float(last["year_index"])
+        path: list[dict] = []
+        row = None
+        for step in range(1, steps + 1):
+            # Advance one year: this year's values become next year's lags.
+            row = pd.DataFrame([{
+                "lag_1": history[0],
+                "lag_2": history[1],
+                "lag_3": history[2],
+                "roll_mean_3": float(np.mean(history[:3])),
+                "trend_3": history[0] - history[2],
+                "year_index": year_index + step,
+            }])
+            if row.isna().to_numpy().any():
+                break
+            pred_log = float(fitted.model.predict(row[CATCH_FEATURES])[0])
+            path.append({"year": last_year + step, "predicted_tonnes": float(np.expm1(pred_log))})
+            history.insert(0, pred_log)
+        if len(path) < steps:
             continue
-        pred_log = float(fitted.model.predict(row[CATCH_FEATURES])[0])
+
         results.append({
             "species_id": int(sid),
             "region_id": int(rid),
-            "year": int(last["year"].iloc[0]) + 1,
-            "predicted_tonnes": float(np.expm1(pred_log)),
-            "last_observed_tonnes": float(last["catch_tonnes"].iloc[0]),
+            "year": path[-1]["year"],
+            "predicted_tonnes": path[-1]["predicted_tonnes"],
+            "last_observed_year": last_year,
+            "last_observed_tonnes": float(last["catch_tonnes"]),
+            "horizon_years": steps,
+            "path": path,
+            # Inputs to the final step — what SHAP attributes the target year to.
             "features": row.iloc[0].to_dict(),
         })
     return results

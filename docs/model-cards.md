@@ -88,8 +88,13 @@ small stocks at the cost of the few large ones that dominate a tonnage-scale
 MAE. Catch is driven by fishing effort, policy and markets that are absent
 from this dataset, so a large gain over persistence was never available.
 
-*Limitations.* SAU's reconstruction ends in 2019, so "next year" means 2020
-— this demonstrates method on real data, it is not an operational forecast.
+*Limitations.* SAU's reconstruction ends in 2019. The endpoint forecasts
+the next calendar year (or `target_year`) by rolling the one-step model
+forward recursively from 2019, each predicted year feeding the next as its
+lag — so a 2027 forecast is eight compounded steps from real data, and the
+1-year holdout skill above does not describe its error. The response
+returns the full year-by-year path and `horizon_years` so this is visible.
+This demonstrates method on real data; it is not an operational forecast.
 Requires ≥6 consecutive annual observations. Species identity is not a
 feature (a 110-level categorical over ~6,000 rows would mostly memorise
 means); it enters only through each series' own lags.

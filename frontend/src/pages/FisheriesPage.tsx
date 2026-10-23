@@ -247,9 +247,9 @@ export function FisheriesPage() {
       )}
 
       <div className="rounded-lg border border-ocean-200 p-4 text-sm dark:border-ocean-800">
-        <h2 className="mb-2 font-semibold text-ocean-700 dark:text-ocean-200">Predict next year&rsquo;s catch</h2>
+        <h2 className="mb-2 font-semibold text-ocean-700 dark:text-ocean-200">Catch forecast for {new Date().getFullYear() + 1}</h2>
         {speciesId === undefined ? (
-          <p className="text-ocean-500">Pick a species above to predict its catch for next year.</p>
+          <p className="text-ocean-500">Pick a species above to forecast its catch for next year.</p>
         ) : prediction.isLoading ? (
           <LoadingRows rows={2} />
         ) : predictionUnavailable ? (
@@ -266,8 +266,8 @@ export function FisheriesPage() {
             return (
               <div className="flex flex-col gap-3">
                 <p className="text-ocean-600 dark:text-ocean-300">
-                  Predicted catch for <strong>{p.year}</strong>: <strong>{fmt(p.predicted_tonnes)} t</strong>{' '}
-                  (last observed: {fmt(p.last_observed_tonnes)} t
+                  Forecast catch for <strong>{p.year}</strong>: <strong>{fmt(p.predicted_tonnes)} t</strong>{' '}
+                  (last real record: {fmt(p.last_observed_tonnes)} t in {p.last_observed_year}
                   {pct !== null && (
                     <>
                       , {pct >= 0 ? 'up' : 'down'} about <strong>{Math.abs(pct).toFixed(1)}%</strong>
@@ -275,6 +275,26 @@ export function FisheriesPage() {
                   )}
                   ).
                 </p>
+                {p.horizon_years > 1 && (
+                  <>
+                    {/* The source (Sea Around Us) stops in 2019, so a future
+                        year is reached by feeding each forecast back in as
+                        the next year's input. Say so, and show the path. */}
+                    <p className="text-xs text-amber-500">
+                      The catch records end in {p.last_observed_year}, so this forecast is projected{' '}
+                      {p.horizon_years} years forward, each year built on the previous year&rsquo;s forecast. Treat
+                      it as a rough trend, not a precise figure &mdash; uncertainty grows with every year past{' '}
+                      {p.last_observed_year}.
+                    </p>
+                    <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-ocean-500">
+                      {p.path.map((pt) => (
+                        <span key={pt.year}>
+                          {pt.year}: <strong>{fmt(pt.predicted_tonnes)} t</strong>
+                        </span>
+                      ))}
+                    </div>
+                  </>
+                )}
                 <p className="text-xs text-ocean-500">
                   Model skill vs. a no-change baseline: {(p.skill.skill_vs_persistence * 100).toFixed(0)}%
                   {p.skill.skill_vs_persistence <= 0.1 && ' — barely better than assuming no change; read this prediction loosely.'}
