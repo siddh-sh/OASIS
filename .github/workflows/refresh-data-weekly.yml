@@ -45,18 +45,22 @@ jobs:
       # Order matters here: gbif.py reads species_occurrences_obis.csv to
       # decide which species to back-fill, so obis.py must succeed first.
       - name: Biodiversity (OBIS)
+        timeout-minutes: 15
         continue-on-error: true
         run: python -u data-pipeline/collectors/obis.py
 
       - name: Biodiversity backfill (GBIF)
+        timeout-minutes: 15
         continue-on-error: true
         run: python -u data-pipeline/collectors/gbif.py
 
       - name: Genomics (BOLD Systems)
+        timeout-minutes: 20
         continue-on-error: true
         run: python -u data-pipeline/collectors/bold.py
 
       - name: Fisheries (FAO via OWID)
+        timeout-minutes: 5
         continue-on-error: true
         run: python -u data-pipeline/collectors/fao_fisheries.py
 
@@ -64,6 +68,7 @@ jobs:
       # RELEASE in the collector when a new one appears. Re-pulling the same
       # release is a no-op diff.
       - name: Fisheries species catch (FAO FishStat)
+        timeout-minutes: 10
         continue-on-error: true
         run: python -u data-pipeline/collectors/fao_capture.py
 
@@ -93,6 +98,7 @@ jobs:
       # Sources like Sea Around Us and FAO supply names only; fill the blank
       # classification from GBIF/WoRMS before embedding, which uses it.
       - name: Backfill species taxonomy
+        timeout-minutes: 15
         if: env.DATABASE_URL != ''
         continue-on-error: true
         run: python -u data-pipeline/cleaning/backfill_taxonomy.py

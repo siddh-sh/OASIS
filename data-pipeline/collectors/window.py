@@ -29,7 +29,10 @@ LAG_DAYS = {
     "noaa_sst": 5,
     "open_meteo": 6,
     "noaa_chla": 18,
-    "rama_buoys": 40,
+    # 0, not the ~4-week telemetry lag: this is a tabledap query, which just
+    # returns the rows that exist up to the end date instead of 404ing like
+    # a griddap axis does. A 40-day pad cut off two weeks of real readings.
+    "rama_buoys": 0,
     "obis": 0,  # occurrence records are historical; no ingest lag to pad for
 }
 

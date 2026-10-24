@@ -30,7 +30,10 @@ jobs:
     # secret is added, which skips those steps.
     env:
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
-    timeout-minutes: 45      # PMEL's ERDDAP is slow; the buoy pull alone can take ~10 min
+    timeout-minutes: 60
+    # Each collector also has its own timeout below, so one stuck upstream
+    # can't use the whole job budget and starve the database load (a buoy
+    # server redirect once ate all 45 minutes this way).
 
     steps:
       - uses: actions/checkout@v4
@@ -48,14 +51,17 @@ jobs:
       # the others from refreshing.
       - name: Weather (Open-Meteo)
         continue-on-error: true
+        timeout-minutes: 10
         run: python -u data-pipeline/collectors/open_meteo.py
 
       - name: Satellites (NOAA ERDDAP SST + chlorophyll)
         continue-on-error: true
+        timeout-minutes: 25
         run: python -u data-pipeline/collectors/noaa_erddap.py
 
       - name: Sensors (NOAA PMEL RAMA buoys)
         continue-on-error: true
+        timeout-minutes: 15
         run: python -u data-pipeline/collectors/rama_buoys.py
 
       - name: Show what changed

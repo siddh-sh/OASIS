@@ -47,7 +47,12 @@ HEADERS = {
     )
 }
 
-BASE = "https://data.pmel.noaa.gov/pmel/erddap/tabledap"
+# PMEL's own ERDDAP (data.pmel.noaa.gov/pmel/erddap) now answers every query
+# for these datasets with a 302 to http://coastwatch.pfeg.noaa.gov — plain
+# HTTP on port 80, which GitHub's runners could not connect to (the refresh
+# job spent its whole time budget retrying). Same datasets, asked for
+# directly over HTTPS.
+BASE = "https://coastwatch.pfeg.noaa.gov/erddap/tabledap"
 # Rolling 2-year window, padded for Argos telemetry + QC lag (~4 weeks).
 START_DATE, END_DATE = window("rama_buoys")
 

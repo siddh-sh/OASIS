@@ -50,7 +50,7 @@ DAILY_VARS = (
 BASE_URL = "https://archive-api.open-meteo.com/v1/archive"
 
 
-def fetch_point(state, name, lat, lon):
+def fetch_point(state, name, lat, lon, retries=3):
     params = {
         "latitude": lat,
         "longitude": lon,
@@ -59,9 +59,18 @@ def fetch_point(state, name, lat, lon):
         "daily": DAILY_VARS,
         "timezone": "Asia/Kolkata",
     }
-    resp = requests.get(BASE_URL, params=params, timeout=60)
-    resp.raise_for_status()
-    return resp.json()
+    # The archive API intermittently takes >60s from CI runners (4 of 18
+    # stations timed out on one run), so retry with backoff before giving up.
+    for attempt in range(1, retries + 1):
+        try:
+            resp = requests.get(BASE_URL, params=params, timeout=90)
+            resp.raise_for_status()
+            return resp.json()
+        except requests.RequestException as e:
+            if attempt == retries:
+                raise
+            print(f"  attempt {attempt} failed ({e}); retrying in {attempt * 15}s ...")
+            time.sleep(attempt * 15)
 
 
 def main():
@@ -69,14 +78,19 @@ def main():
     manifest = []
     for state, name, lat, lon in ANCHOR_POINTS:
         print(f"Fetching weather: {name}, {state} ({lat}, {lon}) ...")
+        raw_path = OUT_DIR / f"{name.lower().replace(' ', '_')}.json"
         try:
             data = fetch_point(state, name, lat, lon)
+            raw_path.write_text(json.dumps(data), encoding="utf-8")
         except requests.RequestException as e:
-            print(f"  FAILED: {e}")
-            continue
-
-        raw_path = OUT_DIR / f"{name.lower().replace(' ', '_')}.json"
-        raw_path.write_text(json.dumps(data), encoding="utf-8")
+            # Dropping the station would remove it from the committed combined
+            # CSV, so a later full reload would lose its history. Keep the
+            # previous pull instead; the database already has those rows.
+            if not raw_path.exists():
+                print(f"  FAILED: {e}")
+                continue
+            print(f"  FAILED: {e} — keeping previous data for this station")
+            data = json.loads(raw_path.read_text(encoding="utf-8"))
 
         daily = data.get("daily", {})
         times = daily.get("time", [])
