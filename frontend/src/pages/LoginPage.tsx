@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Navigate, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { checkEmail, normalizeEmail } from '@/auth/emailPolicy'
 import { isPasswordValid } from '@/auth/passwordPolicy'
 import { EmailInput } from '@/components/EmailInput'
@@ -14,7 +14,9 @@ const inputClass = 'rounded-md border border-ocean-300 px-3 py-2 text-sm dark:bo
 export function LoginPage() {
   const { login, signup, isAuthenticated, isLoading, error } = useAuth()
   const { t } = useTranslation()
-  const [mode, setMode] = useState<'login' | 'signup' | 'forgot'>('login')
+  // `?mode=signup` lets the homepage's Sign up button open this tab directly.
+  const [searchParams] = useSearchParams()
+  const [mode, setMode] = useState<'login' | 'signup' | 'forgot'>(searchParams.get('mode') === 'signup' ? 'signup' : 'login')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [fullName, setFullName] = useState('')
@@ -27,8 +29,6 @@ export function LoginPage() {
   // left the email box.
   const [attempted, setAttempted] = useState(false)
   const navigate = useNavigate()
-
-  if (isAuthenticated) return <Navigate to="/dashboard" replace />
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -80,6 +80,15 @@ export function LoginPage() {
         </div>
         <h1 className="mb-1 text-xl font-semibold text-ocean-950 dark:text-ocean-50">{t('nav.appName')}</h1>
         <p className="mb-6 text-sm text-ocean-500">{t('login.tagline')}</p>
+
+        {/* The form stays usable for a signed-in visitor (e.g. switching
+            accounts from the homepage); this just offers the shortcut. */}
+        {isAuthenticated && (
+          <p className="mb-4 rounded-md bg-ocean-100 px-3 py-2 text-sm text-ocean-700 dark:bg-ocean-950 dark:text-ocean-200">
+            {t('login.alreadySignedIn')}{' '}
+            <Link to="/dashboard" className="font-medium underline">{t('login.continueToDashboard')}</Link>
+          </p>
+        )}
 
         {mode === 'forgot' ? (
           <form onSubmit={handleForgot} className="flex flex-col gap-3">

@@ -1,0 +1,285 @@
+/* Public homepage. Scoped under .oasis-home so nothing leaks into the app.
+   Performance rules for this file: animate only transform and opacity,
+   keep backdrop-filter to a handful of elements, and stop decorative
+   motion entirely under prefers-reduced-motion. */
+
+.oasis-home {
+  --abyss: #031b2a;
+  --midnight: #052638;
+  --deep-teal: #063d50;
+  --cyan: #13c7de;
+  --turquoise: #36e0d0;
+  --coral: #ff6384;
+  --seafoam: #a7f3e5;
+  --white: #f4fafc;
+  --muted: #9cb6c4;
+  --glass-bg: rgba(5, 38, 56, 0.55);
+  --glass-line: rgba(167, 243, 229, 0.16);
+
+  background: var(--abyss);
+  color: var(--white);
+  overflow-x: clip;
+}
+
+.oasis-home .font-display {
+  font-family: 'Fraunces', Georgia, 'Times New Roman', serif;
+  font-optical-sizing: auto;
+  letter-spacing: -0.02em;
+}
+
+.oasis-home .eyebrow {
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: var(--turquoise);
+}
+
+.oasis-home .text-gradient {
+  background: linear-gradient(100deg, var(--turquoise) 10%, var(--cyan) 55%, var(--seafoam) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* ---------- glass ---------- */
+.oasis-home .glass {
+  background: rgba(5, 38, 56, 0.86);
+  border: 1px solid var(--glass-line);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 18px 50px -20px rgba(0, 0, 0, 0.65);
+}
+
+@supports (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)) {
+  .oasis-home .glass {
+    background: var(--glass-bg);
+    backdrop-filter: blur(18px) saturate(150%);
+    -webkit-backdrop-filter: blur(18px) saturate(150%);
+  }
+}
+
+/* Cheaper sibling for content overlays on cards — no blur, just a tint. */
+.oasis-home .tint {
+  background: linear-gradient(180deg, rgba(3, 27, 42, 0) 0%, rgba(3, 27, 42, 0.78) 55%, rgba(3, 27, 42, 0.94) 100%);
+}
+
+/* ---------- buttons ---------- */
+.oasis-home .btn-primary {
+  background: linear-gradient(100deg, var(--cyan), var(--turquoise));
+  color: #022231;
+  font-weight: 600;
+  transition: transform 200ms ease, box-shadow 200ms ease;
+}
+
+.oasis-home .btn-primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 28px -6px rgba(54, 224, 208, 0.6);
+}
+
+.oasis-home .btn-ghost {
+  border: 1px solid rgba(19, 199, 222, 0.55);
+  background: rgba(5, 38, 56, 0.35);
+  color: var(--white);
+  transition: background-color 200ms ease, border-color 200ms ease;
+}
+
+.oasis-home .btn-ghost:hover {
+  background: rgba(19, 199, 222, 0.12);
+  border-color: var(--turquoise);
+}
+
+.oasis-home .btn-coral {
+  background: var(--coral);
+  color: #2a0710;
+  font-weight: 600;
+  transition: transform 200ms ease, box-shadow 200ms ease;
+}
+
+.oasis-home .btn-coral:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 28px -8px rgba(255, 99, 132, 0.7);
+}
+
+.oasis-home a:focus-visible,
+.oasis-home button:focus-visible {
+  outline: 2px solid var(--turquoise);
+  outline-offset: 3px;
+}
+
+/* ---------- navbar ---------- */
+.oasis-home .nav-shell {
+  transition: background-color 300ms ease, border-color 300ms ease, box-shadow 300ms ease;
+  border-bottom: 1px solid transparent;
+}
+
+.oasis-home .nav-shell.is-scrolled {
+  background: rgba(3, 27, 42, 0.92);
+  border-bottom-color: var(--glass-line);
+  box-shadow: 0 10px 30px -18px rgba(0, 0, 0, 0.8);
+}
+
+@supports (backdrop-filter: blur(1px)) {
+  .oasis-home .nav-shell.is-scrolled {
+    background: rgba(3, 27, 42, 0.62);
+    backdrop-filter: blur(16px);
+  }
+}
+
+.oasis-home .emblem-ring {
+  animation: home-spin 18s linear infinite;
+  transform-origin: 50% 50%;
+}
+
+/* ---------- hero ---------- */
+.oasis-home .hero-image {
+  will-change: transform;
+}
+
+.oasis-home .ray {
+  position: absolute;
+  top: -10%;
+  width: 18%;
+  height: 120%;
+  background: linear-gradient(180deg, rgba(167, 243, 229, 0.22), rgba(167, 243, 229, 0) 70%);
+  transform-origin: top center;
+  filter: blur(6px);
+  mix-blend-mode: screen;
+  animation: home-ray 9s ease-in-out infinite alternate;
+  pointer-events: none;
+}
+
+.oasis-home .particle {
+  position: absolute;
+  bottom: -10px;
+  border-radius: 9999px;
+  background: rgba(167, 243, 229, 0.6);
+  box-shadow: 0 0 6px rgba(167, 243, 229, 0.6);
+  animation: home-rise linear infinite;
+  pointer-events: none;
+}
+
+.oasis-home .fish-silhouette {
+  animation: home-swim 46s linear infinite;
+}
+
+.oasis-home .float-a { animation: home-float 7s ease-in-out infinite; }
+.oasis-home .float-b { animation: home-float 8.5s ease-in-out -2s infinite; }
+.oasis-home .float-c { animation: home-float 9.5s ease-in-out -4s infinite; }
+
+.oasis-home .scroll-cue {
+  animation: home-cue 2.2s ease-in-out infinite;
+}
+
+@keyframes home-spin { to { transform: rotate(360deg); } }
+
+@keyframes home-ray {
+  from { opacity: 0.35; transform: rotate(var(--r, 18deg)) translateX(0); }
+  to { opacity: 0.75; transform: rotate(calc(var(--r, 18deg) + 4deg)) translateX(3%); }
+}
+
+@keyframes home-rise {
+  from { transform: translate3d(0, 0, 0); opacity: 0; }
+  10% { opacity: 0.9; }
+  to { transform: translate3d(var(--dx, 20px), -105vh, 0); opacity: 0; }
+}
+
+@keyframes home-swim {
+  from { transform: translate3d(-15vw, 0, 0) scaleX(1); }
+  to { transform: translate3d(115vw, -6vh, 0) scaleX(1); }
+}
+
+@keyframes home-float {
+  0%, 100% { transform: translate3d(0, 0, 0); }
+  50% { transform: translate3d(0, -10px, 0); }
+}
+
+@keyframes home-cue {
+  0%, 100% { transform: translateY(0); opacity: 0.6; }
+  50% { transform: translateY(6px); opacity: 1; }
+}
+
+/* ---------- scroll reveal ---------- */
+.oasis-home .reveal {
+  opacity: 0;
+  transform: translateY(24px);
+  transition: opacity 700ms ease, transform 700ms cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+.oasis-home .reveal.is-visible {
+  opacity: 1;
+  transform: none;
+}
+
+/* ---------- feature cards ---------- */
+.oasis-home .domain-card {
+  transition: transform 350ms cubic-bezier(0.2, 0.7, 0.2, 1), border-color 350ms ease, box-shadow 350ms ease;
+  border: 1px solid rgba(167, 243, 229, 0.1);
+}
+
+.oasis-home .domain-card:hover,
+.oasis-home .domain-card:focus-visible {
+  transform: translateY(-4px);
+  border-color: rgba(54, 224, 208, 0.5);
+  box-shadow: 0 24px 50px -24px rgba(19, 199, 222, 0.55);
+}
+
+.oasis-home .domain-card .card-media {
+  transition: transform 700ms cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+.oasis-home .domain-card:hover .card-media,
+.oasis-home .domain-card:focus-visible .card-media {
+  transform: scale(1.06);
+}
+
+.oasis-home .domain-card .card-arrow {
+  transition: transform 300ms ease;
+}
+
+.oasis-home .domain-card:hover .card-arrow,
+.oasis-home .domain-card:focus-visible .card-arrow {
+  transform: translateX(4px);
+}
+
+.oasis-home .domain-card .card-more {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transition: grid-template-rows 350ms ease, opacity 350ms ease;
+}
+
+.oasis-home .domain-card:hover .card-more,
+.oasis-home .domain-card:focus-visible .card-more {
+  grid-template-rows: 1fr;
+  opacity: 1;
+}
+
+@media (hover: none) {
+  .oasis-home .domain-card .card-more {
+    grid-template-rows: 1fr;
+    opacity: 1;
+  }
+}
+
+/* Mission diagram: a dash travels along each connector. */
+.oasis-home .flow-line {
+  stroke-dasharray: 4 10;
+  animation: home-flow 3s linear infinite;
+}
+
+@keyframes home-flow { to { stroke-dashoffset: -28; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .oasis-home *,
+  .oasis-home *::before,
+  .oasis-home *::after {
+    animation: none !important;
+    transition-duration: 0.01ms !important;
+  }
+
+  .oasis-home .reveal {
+    opacity: 1;
+    transform: none;
+  }
+}

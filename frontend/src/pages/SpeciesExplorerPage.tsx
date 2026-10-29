@@ -187,8 +187,8 @@ export function SpeciesExplorerPage() {
                   </>
                 ) : (
                   <>
-                    Nothing photographed in the last {photos.data?.recent_window_days} days — showing the newest
-                    available regardless of age (see the date on each photo below).
+                    Nothing photographed in the last {photos.data?.recent_window_days} days — showing the most
+                    recent photos available.
                   </>
                 )}
               </p>
@@ -202,7 +202,7 @@ export function SpeciesExplorerPage() {
                       className="h-28 w-40 rounded-md object-cover"
                     />
                     <figcaption className="mt-1 text-[11px] leading-tight text-ocean-500">
-                      <div>{p.grid_cell ?? '—'}{p.observed_at ? ` · ${p.observed_at.slice(0, 10)}` : ''}</div>
+                      <div>{p.grid_cell ?? '—'}</div>
                       {/* Attribution is not optional: these are CC-licensed
                           photos by named people. */}
                       <div className="truncate">

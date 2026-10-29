@@ -10,6 +10,8 @@ start between turns without losing the thread.
 """
 from __future__ import annotations
 
+import logging
+
 from langchain_core.messages import AIMessage, HumanMessage
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -20,6 +22,8 @@ from app.db.models import AgentConversation, AgentMessage
 # Enough turns for a follow-up question without letting an old thread grow
 # until it blows the model's context window mid-demo.
 HISTORY_LIMIT = 12
+
+logger = logging.getLogger(__name__)
 
 
 def _load_history(db: Session, conversation_id: int) -> list:
@@ -51,6 +55,11 @@ def _fallback_answer(message: str, exc: Exception) -> str:
         )
     elif "rate" in detail.lower() and "limit" in detail.lower():
         reason = "The LLM provider's free-tier rate limit was hit."
+    elif "model_not_found" in detail:
+        reason = (
+            "The configured LLM model is unavailable at the provider — "
+            "LLM_MODEL in .env needs updating."
+        )
     else:
         reason = "The agent pipeline failed on that question."
     return (
@@ -92,6 +101,7 @@ def chat(
         # tool-free answer that is explicit about its own limits.
         # flow.md §15: "cap agent hop count, add per-agent timeouts with
         # graceful fallback text".
+        logger.exception("agent pipeline failed for conversation %s", conversation_id)
         answer = _fallback_answer(message, exc)
         tools = []
 

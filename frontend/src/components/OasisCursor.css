@@ -1,0 +1,90 @@
+/* Styles for OasisCursor.tsx. The html class is set only while the cursor
+   is mounted on a fine-pointer device, so the native cursor is never hidden
+   anywhere the custom one is not drawn. */
+html.oasis-cursor-on,
+html.oasis-cursor-on * {
+  cursor: none;
+}
+
+/* Typing and selecting keep their native affordances. */
+html.oasis-cursor-on input,
+html.oasis-cursor-on textarea,
+html.oasis-cursor-on [contenteditable='true'] {
+  cursor: text;
+}
+
+.oasis-cursor {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 9999;
+  pointer-events: none;
+  will-change: transform;
+}
+
+.oasis-cursor-scale {
+  width: 72px;
+  height: 72px;
+  margin: -36px 0 0 -36px;
+  transition: transform 220ms cubic-bezier(0.2, 0.9, 0.3, 1.4), filter 220ms ease;
+}
+
+.oasis-cursor.is-hover .oasis-cursor-scale { transform: scale(1.28); }
+.oasis-cursor.is-primary .oasis-cursor-scale {
+  transform: scale(1.42);
+  filter: drop-shadow(0 0 8px rgba(54, 224, 208, 0.85));
+}
+.oasis-cursor.is-down .oasis-cursor-scale { transform: scale(0.82); }
+
+.oasis-cursor-orbit {
+  transform-origin: 50px 50px;
+  animation: oasis-cursor-spin 10s linear infinite;
+}
+
+.oasis-cursor.is-hover .oasis-cursor-orbit { animation-duration: 4s; }
+
+.oasis-cursor-pulse {
+  position: absolute;
+  inset: 0;
+  margin: -36px 0 0 -36px;
+  width: 72px;
+  height: 72px;
+  border-radius: 9999px;
+  border: 1.5px solid var(--turquoise, #36e0d0);
+  opacity: 0;
+}
+
+.oasis-cursor.is-pulse .oasis-cursor-pulse {
+  animation: oasis-cursor-pulse 450ms ease-out;
+}
+
+@keyframes oasis-cursor-pulse {
+  from { transform: scale(0.6); opacity: 0.9; }
+  to { transform: scale(1.6); opacity: 0; }
+}
+
+.oasis-cursor-dot {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 10000;
+  width: 6px;
+  height: 6px;
+  margin: -3px 0 0 -3px;
+  border-radius: 9999px;
+  background: #f4fafc;
+  box-shadow: 0 0 0 1.5px rgba(3, 27, 42, 0.9), 0 0 8px rgba(54, 224, 208, 0.9);
+  pointer-events: none;
+  will-change: transform;
+}
+
+@keyframes oasis-cursor-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .oasis-cursor-orbit,
+  .oasis-cursor.is-pulse .oasis-cursor-pulse {
+    animation: none;
+  }
+}

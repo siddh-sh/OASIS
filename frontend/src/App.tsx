@@ -8,6 +8,7 @@ import { ChatbotPage } from '@/pages/ChatbotPage'
 import { CorrelationPage } from '@/pages/CorrelationPage'
 import { DashboardPage } from '@/pages/DashboardPage'
 import { FisheriesPage } from '@/pages/FisheriesPage'
+import { HomePage } from '@/pages/HomePage'
 import { LoginPage } from '@/pages/LoginPage'
 import { MolecularPage } from '@/pages/MolecularPage'
 import { OceanExplorerPage } from '@/pages/OceanExplorerPage'
@@ -38,7 +39,7 @@ function App() {
     <Routes>
       <Route path="/login" element={<LoginPage />} />
       <Route path="/reset-password" element={<ResetPasswordPage />} />
-      <Route path="/" element={<Navigate to="/dashboard" replace />} />
+      <Route path="/" element={<HomePage />} />
 
       <Route
         element={

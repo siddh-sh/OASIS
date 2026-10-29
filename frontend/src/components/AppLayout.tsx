@@ -2,6 +2,7 @@ import { useTranslation } from 'react-i18next'
 import { Link, Outlet } from 'react-router-dom'
 import { LanguageSwitcher } from '@/components/LanguageSwitcher'
 import { NavSidebar } from '@/components/NavSidebar'
+import { RefreshPrompt } from '@/components/RefreshPrompt'
 import { ViewModeSwitcher } from '@/components/ViewModeSwitcher'
 import { useAuth } from '@/hooks/useAuth'
 
@@ -34,6 +35,7 @@ export function AppLayout() {
         <main className="min-w-0 flex-1 overflow-y-auto p-6">
           <Outlet />
         </main>
+        <RefreshPrompt />
       </div>
     </div>
   )

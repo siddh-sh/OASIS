@@ -40,7 +40,7 @@ export function DashboardPage() {
         <KPITile
           label="Latest annual catch"
           value={latestCatch ? Math.round(latestCatch.catch_metric_tons).toLocaleString() : undefined}
-          unit={latestCatch ? `t (${latestCatch.year})` : undefined}
+          unit={latestCatch ? 't' : undefined}
           loading={fisheries.isLoading}
         />
       </div>

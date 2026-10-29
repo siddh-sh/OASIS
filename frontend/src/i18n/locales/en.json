@@ -21,6 +21,8 @@
     "language": "Language"
   },
   "login": {
+    "alreadySignedIn": "You're already signed in.",
+    "continueToDashboard": "Continue to dashboard",
     "tagline": "Unified oceanographic, fisheries & biodiversity intelligence",
     "loginTab": "Login",
     "signupTab": "Signup",
