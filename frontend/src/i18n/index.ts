@@ -35,6 +35,9 @@ export const SUPPORTED_LANGUAGES = [
   { code: 'bn', label: 'বাংলা (Bengali)', state: 'West Bengal' },
 ] as const
 
+/** Languages maintained key-for-key with English (enforced by locales.test.ts). */
+export const FULLY_SUPPORTED: string[] = SUPPORTED_LANGUAGES.map((l) => l.code)
+
 export type LanguageCode = (typeof SUPPORTED_LANGUAGES)[number]['code']
 
 /**
@@ -68,8 +71,26 @@ i18n.use(initReactI18next).init({
     bn: { translation: bn },
   },
   lng: 'en',
+  // Every language is maintained key-for-key with English (enforced by
+  // locales.test.ts); the fallback only matters if a key is ever added to
+  // English first, and then it shows English rather than a raw key.
   fallbackLng: 'en',
   interpolation: { escapeValue: false },
+  // Surface a missing key during development instead of letting it fall
+  // back silently — the fallback hides exactly the gaps worth fixing.
+  saveMissing: import.meta.env.DEV,
+  missingKeyHandler: (lngs, _ns, key) => {
+    if (!FULLY_SUPPORTED.includes(i18n.language)) return
+    console.warn(`[i18n] missing key "${key}" for ${lngs.join(', ')}`)
+  },
 })
+
+// Keep <html lang> in step so screen readers pronounce the text in the right
+// language and the browser picks a Devanagari-capable font for Marathi.
+const syncDocumentLanguage = (language: string) => {
+  if (typeof document !== 'undefined') document.documentElement.lang = language
+}
+syncDocumentLanguage(i18n.language)
+i18n.on('languageChanged', syncDocumentLanguage)
 
 export default i18n

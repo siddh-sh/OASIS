@@ -10,10 +10,11 @@ import { persist } from 'zustand/middleware'
  */
 export type RefreshChoice = 'ask' | 'stay' | 'home'
 
-export const REFRESH_CHOICES: { value: RefreshChoice; label: string }[] = [
-  { value: 'ask', label: 'Ask me each time' },
-  { value: 'stay', label: 'Stay on the page' },
-  { value: 'home', label: 'Go to the homepage' },
+/** Labels live in the dictionaries under `refresh.<labelKey>`. */
+export const REFRESH_CHOICES: { value: RefreshChoice; labelKey: 'ask' | 'stayChoice' | 'homeChoice' }[] = [
+  { value: 'ask', labelKey: 'ask' },
+  { value: 'stay', labelKey: 'stayChoice' },
+  { value: 'home', labelKey: 'homeChoice' },
 ]
 
 interface RefreshPreferenceState {

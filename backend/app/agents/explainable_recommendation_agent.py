@@ -22,7 +22,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.agents.llm import get_llm
+from app.agents.llm import get_llm, language_instruction
 from app.db.models import AnomalyEvent, MLPrediction, OceanographicStation, Recommendation, Species
 
 SYSTEM_PROMPT = """You advise Indian marine researchers and fisheries \
@@ -80,7 +80,9 @@ def _describe_anomaly(db: Session, event: AnomalyEvent) -> str:
         "severity": event.severity,
         "observed_value": float(event.metric_value) if event.metric_value is not None else None,
         "threshold": float(event.threshold_value) if event.threshold_value is not None else None,
-        "unit": "degrees_C" if event.variable == "sst" else "mg/m3",
+        # Display symbols, not unit codes: the model copies whatever it is
+        # given into the narrative ("30.5 degrees_C").
+        "unit": "°C" if event.variable == "sst" else "mg/m³",
         "method": (
             "Residual from a per-station annual harmonic baseline, scored against a "
             "MAD-scaled z. Two years of 8-day composites, so this is unusual relative "
@@ -98,6 +100,12 @@ def _describe_anomaly(db: Session, event: AnomalyEvent) -> str:
     return json.dumps(payload, default=str)
 
 
+# Non-English narratives are cached in process, keyed by language: the
+# `recommendations` table has no language column, and localisation is not a
+# reason to change the schema. English keeps using the table as before.
+_LOCALIZED: dict[tuple[int | None, int | None, str], dict] = {}
+
+
 def _existing(db: Session, *, prediction_id: int | None, anomaly_id: int | None) -> Recommendation | None:
     stmt = select(Recommendation)
     stmt = (
@@ -108,7 +116,9 @@ def _existing(db: Session, *, prediction_id: int | None, anomaly_id: int | None)
     return db.scalars(stmt.order_by(Recommendation.created_at.desc()).limit(1)).first()
 
 
-def recommend(db: Session, target_id: int, *, refresh: bool = False) -> dict | None:
+def recommend(
+    db: Session, target_id: int, *, refresh: bool = False, language: str = "en"
+) -> dict | None:
     """Narrate prediction `target_id`, or the anomaly with that id if no such
     prediction exists. Returns None when neither is found.
 
@@ -122,6 +132,25 @@ def recommend(db: Session, target_id: int, *, refresh: bool = False) -> dict | N
 
     prediction_id = int(prediction.id) if prediction else None
     anomaly_id = int(event.id) if event else None
+
+    if language != "en":
+        key = (prediction_id, anomaly_id, language)
+        if not refresh and key in _LOCALIZED:
+            return {**_LOCALIZED[key], "cached": True}
+        context = _describe_prediction(db, prediction) if prediction else _describe_anomaly(db, event)
+        narrative = get_llm(temperature=0.2).invoke(
+            [SystemMessage(content=SYSTEM_PROMPT + language_instruction(language)),
+             HumanMessage(content=context)]
+        ).content.strip()
+        _LOCALIZED[key] = {
+            "id": None,
+            "ml_prediction_id": prediction_id,
+            "anomaly_event_id": anomaly_id,
+            "narrative": narrative,
+            "created_at": None,
+            "language": language,
+        }
+        return {**_LOCALIZED[key], "cached": False}
 
     if not refresh:
         cached = _existing(db, prediction_id=prediction_id, anomaly_id=anomaly_id)

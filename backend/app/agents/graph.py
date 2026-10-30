@@ -20,6 +20,7 @@ Two guardrails, both from flow.md §15's risk table:
 """
 from __future__ import annotations
 
+from datetime import date
 from typing import Annotated, TypedDict
 
 from langchain_core.messages import AnyMessage, BaseMessage, SystemMessage, ToolMessage
@@ -28,7 +29,7 @@ from langgraph.graph.message import add_messages
 from langgraph.prebuilt import ToolNode
 from sqlalchemy.orm import Session
 
-from app.agents.llm import get_llm
+from app.agents.llm import get_llm_with_tools, language_instruction
 from app.agents.tools import build_tools
 
 MAX_HOPS = 4
@@ -57,15 +58,17 @@ class ChatState(TypedDict):
     hops: int
 
 
-def build_graph(db: Session):
+def build_graph(db: Session, language: str = "en"):
     tools = build_tools(db)
-    llm = get_llm().bind_tools(tools)
+    llm = get_llm_with_tools(tools)
     tool_node = ToolNode(tools)
 
     def agent(state: ChatState) -> dict:
         messages = state["messages"]
         if not any(isinstance(m, SystemMessage) for m in messages):
-            messages = [SystemMessage(content=SYSTEM_PROMPT), *messages]
+            # Today's date, so "last year" / "this month" resolve correctly.
+            prompt = f"{SYSTEM_PROMPT}Today is {date.today().isoformat()}.\n{language_instruction(language)}"
+            messages = [SystemMessage(content=prompt), *messages]
         return {"messages": [llm.invoke(messages)], "hops": state.get("hops", 0) + 1}
 
     def route(state: ChatState) -> str:

@@ -1,16 +1,19 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { useTranslation } from 'react-i18next'
+import { Trans, useTranslation } from 'react-i18next'
 import { DataSourceBadge } from '@/components/DataSourceBadge'
 import { FilterField, FilterSidebar } from '@/components/FilterSidebar'
 import { LoadingRows } from '@/components/LoadingSkeleton'
 import { MapView } from '@/components/MapView'
 import { speciesExtrasApi } from '@/api/species'
 import { useSpeciesList, useSpeciesOccurrences } from '@/hooks/useSpeciesData'
+import { placeName } from '@/i18n/dynamic'
+import { useFormat } from '@/i18n/format'
 import { showsTechnicalDetail, speciesLabel, useViewModeStore } from '@/store/viewMode'
 
 export function SpeciesExplorerPage() {
   const { t, i18n } = useTranslation()
+  const fmt = useFormat()
   const [query, setQuery] = useState('')
   const [selectedSpecies, setSelectedSpecies] = useState<number>()
 
@@ -42,8 +45,10 @@ export function SpeciesExplorerPage() {
     refetchInterval: 10 * 60 * 1000,
   })
   const context = useQuery({
-    queryKey: ['species', 'context', selectedSpecies],
-    queryFn: () => speciesExtrasApi.context(selectedSpecies as number),
+    // The explanation is model-written in the active language, so it is
+    // cached per language.
+    queryKey: ['species', 'context', selectedSpecies, i18n.language],
+    queryFn: () => speciesExtrasApi.context(selectedSpecies as number, i18n.language),
     enabled: selectedSpecies !== undefined,
     retry: false,
   })
@@ -70,25 +75,36 @@ export function SpeciesExplorerPage() {
         <h1 className="text-xl font-semibold text-ocean-950 dark:text-ocean-50">{t('pages.species.title')}</h1>
         <p className="text-sm text-ocean-500">
           {t('pages.species.subtitle')}
-          {mode !== 'researcher' && ' Showing common names where we have them.'}
+          {mode !== 'researcher' && ` ${t('species.commonNamesNote')}`}
         </p>
       </div>
 
       <div className="flex gap-6">
         <FilterSidebar>
-          <FilterField label="Search">
+          <FilterField label={t('species.search')}>
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Scientific or common name"
+              placeholder={t('species.searchPlaceholder')}
               className="rounded-md border border-ocean-300 px-2 py-1.5 text-sm dark:border-ocean-700 dark:bg-ocean-950"
             />
           </FilterField>
 
+          {species.data && (
+            <p className="text-xs text-ocean-500">
+              {t('species.resultCount', {
+                count: species.data.total,
+                shown: fmt.int(species.data.items.length),
+                total: fmt.int(species.data.total),
+              })}
+            </p>
+          )}
           {species.isLoading ? (
             <LoadingRows rows={5} />
+          ) : species.data && species.data.items.length === 0 ? (
+            <p className="text-sm text-ocean-500">{t('species.noResults')}</p>
           ) : (
-            <ul className="flex max-h-96 flex-col gap-1 overflow-y-auto text-sm">
+            <ul className="oasis-scroll flex max-h-96 flex-col gap-1 overflow-y-auto text-sm" data-lenis-prevent>
               {species.data?.items.map((s) => (
                 <li key={s.species_id}>
                   <button
@@ -103,9 +119,15 @@ export function SpeciesExplorerPage() {
                       const l = speciesLabel(mode, s.scientific_name, s.common_name, s.vernacular_name)
                       return (
                         <>
-                          <span className={l.primaryIsScientific ? 'italic' : ''}>{l.primary}</span>
+                          {/* Names are data: scientific binomials are never
+                              translated, common/regional names are sourced. */}
+                          <span translate="no" className={l.primaryIsScientific ? 'italic' : ''}>
+                            {l.primary}
+                          </span>
                           {l.secondary && (
-                            <span className="ml-1 text-xs italic opacity-70">{l.secondary}</span>
+                            <span translate="no" className="ml-1 text-xs italic opacity-70">
+                              {l.secondary}
+                            </span>
                           )}
                         </>
                       )
@@ -125,6 +147,7 @@ export function SpeciesExplorerPage() {
                 return (
                   <>
                     <h2
+                      translate="no"
                       className={`mb-1 text-base font-semibold text-ocean-950 dark:text-ocean-50 ${
                         l.primaryIsScientific ? 'italic' : ''
                       }`}
@@ -132,21 +155,33 @@ export function SpeciesExplorerPage() {
                       {l.primary}
                     </h2>
                     {l.secondary && (
-                      <p className="mb-2 italic text-ocean-600 dark:text-ocean-300">{l.secondary}</p>
+                      <p translate="no" className="mb-2 italic text-ocean-600 dark:text-ocean-300">
+                        {l.secondary}
+                      </p>
                     )}
                     {/* Attribution, same reasoning as the photo credits below:
                         this is a real term sourced from a named reference,
                         not a machine translation, and that's worth saying. */}
                     {vernacularName && l.primary === vernacularName && (
                       <p className="mb-2 text-xs text-ocean-500">
-                        Regional name via {vernacularNames.data?.names[i18n.language]?.source}.
+                        {/* A phonetic rendering of the English name is never
+                            passed off as a recorded local name. */}
+                        {vernacularNames.data?.names[i18n.language]?.source === 'Transliteration'
+                          ? t('species.transliterated')
+                          : (
+                            <Trans
+                              i18nKey="species.regionalNameVia"
+                              values={{ source: vernacularNames.data?.names[i18n.language]?.source }}
+                              components={{ name: <span translate="no" /> }}
+                            />
+                          )}
                       </p>
                     )}
                     {/* Honest about the gap rather than silently showing Latin
                         to an audience that asked for common names. */}
                     {l.primaryIsScientific && mode !== 'researcher' && (
                       <p className="mb-2 text-xs text-ocean-500">
-                        No common name recorded for this species — showing its scientific name.
+                        {t('species.noCommonName')}
                       </p>
                     )}
                   </>
@@ -156,17 +191,18 @@ export function SpeciesExplorerPage() {
               <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-ocean-700 dark:text-ocean-300">
                 {(
                   [
-                    ['Kingdom', selected.kingdom],
-                    ['Phylum', selected.phylum],
-                    ['Class', selected.class],
-                    ['Order', selected.order],
-                    ['Family', selected.family],
-                    ['Genus', selected.genus],
+                    [t('species.rank.kingdom'), selected.kingdom],
+                    [t('species.rank.phylum'), selected.phylum],
+                    [t('species.rank.class'), selected.class],
+                    [t('species.rank.order'), selected.order],
+                    [t('species.rank.family'), selected.family],
+                    [t('species.rank.genus'), selected.genus],
                   ] as const
                 ).map(([label, value]) => (
                   <div key={label} className="contents">
                     <dt className="text-ocean-500">{label}</dt>
-                    <dd>{value ?? '—'}</dd>
+                    {/* Taxon names are scientific and stay as recorded. */}
+                    <dd translate="no">{value ?? '—'}</dd>
                   </div>
                 ))}
               </dl>
@@ -177,20 +213,12 @@ export function SpeciesExplorerPage() {
           {selected && (photos.data?.photos.length ?? 0) > 0 && (
             <div className="mb-4">
               <h3 className="text-sm font-semibold text-ocean-700 dark:text-ocean-200">
-                {photos.data?.photos_are_recent ? 'Recent sightings, photographed' : 'Sightings, photographed'}
+                {photos.data?.photos_are_recent ? t('species.photos.recentTitle') : t('species.photos.title')}
               </h3>
               <p className="mb-2 text-[11px] text-ocean-500">
-                {photos.data?.photos_are_recent ? (
-                  <>
-                    Photographed within the last {photos.data?.recent_window_days} days. Refreshes automatically
-                    as new sightings are uploaded.
-                  </>
-                ) : (
-                  <>
-                    Nothing photographed in the last {photos.data?.recent_window_days} days — showing the most
-                    recent photos available.
-                  </>
-                )}
+                {photos.data?.photos_are_recent
+                  ? t('species.photos.recentNote', { count: photos.data?.recent_window_days ?? 0 })
+                  : t('species.photos.olderNote', { count: photos.data?.recent_window_days ?? 0 })}
               </p>
               <div className="flex gap-3 overflow-x-auto pb-2">
                 {photos.data?.photos.map((p) => (
@@ -202,55 +230,54 @@ export function SpeciesExplorerPage() {
                       className="h-28 w-40 rounded-md object-cover"
                     />
                     <figcaption className="mt-1 text-[11px] leading-tight text-ocean-500">
-                      <div>{p.grid_cell ?? '—'}</div>
+                      <div translate="no">{p.grid_cell ?? '—'}</div>
                       {/* Attribution is not optional: these are CC-licensed
                           photos by named people. */}
                       <div className="truncate">
-                        {p.photographer ?? 'Unknown'} · {p.license ?? 'see source'}
+                        <span translate="no">{p.photographer ?? t('species.photos.unknownPhotographer')}</span> ·{' '}
+                        <span translate="no">{p.license ?? t('species.photos.seeSource')}</span>
                       </div>
                     </figcaption>
                   </figure>
                 ))}
               </div>
-              <p className="text-[11px] text-ocean-500">{photos.data?.source}</p>
+              <p className="text-[11px] text-ocean-500">{t('species.photos.source')}</p>
             </div>
           )}
 
           {selected && photos.isError && (
             <p className="mb-4 text-xs text-amber-600 dark:text-amber-400">
-              Photos are temporarily unavailable — GBIF (the photo source) didn't respond. This isn't a data gap;
-              try reselecting the species in a moment.
+              {t('species.photos.unavailable')}
             </p>
           )}
 
           {selected && photos.isFetched && !photos.isError && (photos.data?.photos.length ?? 0) === 0 && (
             <p className="mb-4 text-xs text-ocean-500">
-              {(photos.data?.total_with_photos ?? 0) > 0 ? (
-                <>
-                  No recent photos of this species found (last {photos.data?.recent_window_days} days) — this
-                  section will update automatically if a new sighting is photographed.
-                </>
-              ) : (
-                'No photographed occurrence of this species in India is available from GBIF.'
-              )}
+              {(photos.data?.total_with_photos ?? 0) > 0
+                ? t('species.photos.noneRecent', { count: photos.data?.recent_window_days ?? 0 })
+                : t('species.photos.none')}
             </p>
           )}
 
           {selected && context.data && (
             <div className="mb-4 rounded-lg border border-ocean-200 p-4 text-sm dark:border-ocean-800">
               <h3 className="mb-1 text-sm font-semibold text-ocean-700 dark:text-ocean-200">
-                Why it is found here
+                {t('species.context.title')}
               </h3>
               {context.data.explanation ? (
-                <p className="text-ocean-600 dark:text-ocean-300">{context.data.explanation}</p>
+                // Model-written, in the reader's language (see the context
+                // query); species names inside it stay scientific.
+                <p data-generated="llm" className="text-ocean-600 dark:text-ocean-300">
+                  {context.data.explanation}
+                </p>
               ) : (
-                <p className="text-ocean-500">{context.data.note}</p>
+                <p className="text-ocean-500">{t('species.context.noLlm')}</p>
               )}
               {context.data.relocation_note && (
                 // The doc asked for a relocation forecast. Saying why there
                 // isn't one is more useful than a number nobody should trust.
                 <p className="mt-2 text-xs text-ocean-500">
-                  <strong>Future relocation:</strong> {context.data.relocation_note}
+                  <strong>{t('species.context.relocationLabel')}</strong> {t('species.context.relocationNote')}
                 </p>
               )}
             </div>
@@ -262,7 +289,7 @@ export function SpeciesExplorerPage() {
               .map((o) => ({ id: o.id, lat: o.lat!, lon: o.lon!, kind: 'occurrence' as const }))}
             regionShapes={(regions.data?.regions ?? []).map((r) => ({
               id: r.region_id,
-              name: r.name,
+              name: placeName(r.name),
               positions: r.polygon,
             }))}
             height={380}
@@ -273,14 +300,9 @@ export function SpeciesExplorerPage() {
             ))}
             {selected && regions.isFetched && (
               <span className="text-[11px] text-ocean-500">
-                {regions.data && regions.data.regions.length > 0 ? (
-                  <>
-                    Found in: {regions.data.regions.map((r) => r.name).join(', ')} (shaded above — a
-                    simplified state outline, not a surveyed boundary).
-                  </>
-                ) : (
-                  'No sightings fall within a coastal state boundary we have on file (open water, or outside the 9 states covered).'
-                )}
+                {regions.data && regions.data.regions.length > 0
+                  ? t('species.foundIn', { regions: regions.data.regions.map((r) => placeName(r.name)).join(', ') })
+                  : t('species.notInState')}
               </span>
             )}
           </div>

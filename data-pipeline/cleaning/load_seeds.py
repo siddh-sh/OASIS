@@ -475,6 +475,31 @@ def load_fisheries_catch_fao(cur, regions, species):
            rows, "fisheries_catch [FAO]")
 
 
+def load_transliterations(cur):
+    """Phonetic renderings of English common names in each UI language,
+    from the reviewed CSV that transliterate_common_names.py maintains — so a
+    full reload restores them without calling the LLM again. Matched to
+    species by common name; labelled source 'Transliteration' (see that
+    script for why they are never shown as recorded local names)."""
+    path = RAW / "vernacular" / "transliterations.csv"
+    if not path.exists():
+        print(f"  {'species transliterations':34s} no CSV, skipped")
+        return
+    cur.execute("select common_name, species_id from species where common_name is not null")
+    ids_by_name: dict[str, list[int]] = {}
+    for name, sid in cur.fetchall():
+        ids_by_name.setdefault(name, []).append(sid)
+    rows = [
+        (sid, r["language_code"], r["name"], "Transliteration")
+        for r in read_csv(path)
+        for sid in ids_by_name.get(r["common_name"], [])
+    ]
+    insert(cur,
+           "insert into species_vernacular_names (species_id, language_code, name, source) "
+           "values %s on conflict (species_id, language_code, name, source) do nothing",
+           rows, "species transliterations")
+
+
 def load_molecular(cur, species):
     rows = []
     for r in read_csv(RAW / "molecular" / "molecular_records_bold.csv"):
@@ -600,6 +625,7 @@ def main():
             load_fisheries_catch(cur, regions, species)
             load_fisheries_catch_fao(cur, regions, species)
             load_molecular(cur, species)
+            load_transliterations(cur)
 
             print("\nPost-processing ...")
             backfill_geometry(cur)

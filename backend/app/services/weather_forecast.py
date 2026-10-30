@@ -135,6 +135,9 @@ def get_forecast(lat: float, lon: float, days: int = 7) -> dict[str, Any]:
                 "temperature_c": temp,
                 "precipitation_probability_pct": prob,
                 "condition": describe_code(code),
+                # The code, not just the English phrase, so the UI can show
+                # the condition in the user's language.
+                "weather_code": code,
             }
             for t, temp, prob, code in zip(
                 times[hourly_slice],

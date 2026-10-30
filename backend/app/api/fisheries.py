@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.api.species import vernacular_names
 from app.db.models import FisheriesCatch, FisheriesNationalTotal, Region, Species
 from app.db.session import get_db
 from app.ml.features import CATCH_SOURCES, DEFAULT_CATCH_SOURCE
@@ -88,8 +89,12 @@ def summary(
     )
 
 
+_LANGUAGE_DOC = "attach each species' sourced name in this language, where one exists"
+
+
 @router.get("/filters")
 def catch_filters(
+    language: str | None = Query(default=None, description=_LANGUAGE_DOC),
     source: str = Query(default=DEFAULT_CATCH_SOURCE, pattern="^(FAO|SAU)$", description=_SOURCE_DOC),
     db: Session = Depends(get_db),
 ):
@@ -120,6 +125,7 @@ def catch_filters(
         .order_by(func.sum(FisheriesCatch.catch_weight_kg).desc())
     ).all()
 
+    names = vernacular_names(db, [s_[0] for s_ in species], language) if language else {}
     years = db.execute(
         select(func.min(FisheriesCatch.catch_date), func.max(FisheriesCatch.catch_date))
         .where(FisheriesCatch.source == source)
@@ -138,6 +144,7 @@ def catch_filters(
                 "species_id": s_[0],
                 "scientific_name": s_[1],
                 "common_name": s_[2],
+                "vernacular_name": names.get(s_[0]),
                 "total_tonnes": round(float(s_[3]) / 1000, 1),
             }
             for s_ in species
@@ -153,6 +160,7 @@ def catch_timeseries(
     start_year: int | None = None,
     end_year: int | None = None,
     top_n: int = Query(default=8, ge=1, le=20, description="series kept when grouping"),
+    language: str | None = Query(default=None, description=_LANGUAGE_DOC),
     source: str = Query(default=DEFAULT_CATCH_SOURCE, pattern="^(FAO|SAU)$", description=_SOURCE_DOC),
     db: Session = Depends(get_db),
 ):
@@ -222,12 +230,21 @@ def catch_timeseries(
         bucket = str(k) if k in keep else "other"
         name = labels[k] if k in keep else f"Other ({n_other} more)"
         entry = series.setdefault(bucket, {"key": bucket, "label": name, "_by_year": {}})
+        if bucket == "other":
+            entry["count"] = n_other  # so the UI can phrase "Other (N more)" itself
         entry["_by_year"][int(yr)] = entry["_by_year"].get(int(yr), 0.0) + float(t)
 
+    names = (
+        vernacular_names(db, [int(k) for k in keep], language)
+        if language and group_by == "species"
+        else {}
+    )
     out = [
         {
             "key": e["key"],
+            **({"vernacular_name": names[int(e["key"])]} if e["key"].isdigit() and int(e["key"]) in names else {}),
             "label": e["label"],
+            **({"count": e["count"]} if "count" in e else {}),
             "points": [{"year": y, "tonnes": round(v, 1)} for y, v in sorted(e["_by_year"].items())],
         }
         for e in series.values()

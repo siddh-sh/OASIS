@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { useTranslation } from 'react-i18next'
+import { Trans, useTranslation } from 'react-i18next'
 import {
   Area,
   AreaChart,
@@ -11,12 +11,15 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
+import { ChartLegend } from '@/components/ChartLegend'
 import { DataSourceBadge } from '@/components/DataSourceBadge'
 import { LoadingRows } from '@/components/LoadingSkeleton'
 import { RecommendationPanel } from '@/components/RecommendationPanel'
 import { analyticsApi } from '@/api/analytics'
 import { ApiError } from '@/api/client'
-import { fisheriesBreakdownApi, type CatchSource } from '@/api/fisheries'
+import { fisheriesBreakdownApi, type CatchSeries, type CatchSource } from '@/api/fisheries'
+import { placeName, tDynamic } from '@/i18n/dynamic'
+import { useFormat } from '@/i18n/format'
 
 type GroupBy = 'none' | 'species' | 'region'
 
@@ -24,9 +27,14 @@ type GroupBy = 'none' | 'species' | 'region'
 // residual rather than as another headline species.
 const COLORS = ['#0e7490', '#b45309', '#7c3aed', '#15803d', '#be123c', '#0369a1', '#a16207', '#4d7c0f']
 const OTHER_COLOR = '#94a3b8'
+const GROUP_BY: GroupBy[] = ['none', 'species', 'region']
+const SOURCES: CatchSource[] = ['FAO', 'SAU']
 
 export function FisheriesPage() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
+  const fmt = useFormat()
+  // Sourced regional names are only stored for the Indian languages.
+  const nameLanguage = i18n.language !== 'en' ? i18n.language : undefined
   // FAO by default: it runs to 2024, where Sea Around Us stops at 2019.
   const [source, setSource] = useState<CatchSource>('FAO')
   const [groupBy, setGroupBy] = useState<GroupBy>('species')
@@ -34,12 +42,12 @@ export function FisheriesPage() {
   const [speciesId, setSpeciesId] = useState<number>()
 
   const filters = useQuery({
-    queryKey: ['fisheries', 'filters', source],
-    queryFn: () => fisheriesBreakdownApi.filters(source),
+    queryKey: ['fisheries', 'filters', source, nameLanguage],
+    queryFn: () => fisheriesBreakdownApi.filters(source, nameLanguage),
   })
 
   const data = useQuery({
-    queryKey: ['fisheries', 'timeseries', source, groupBy, regionId, speciesId],
+    queryKey: ['fisheries', 'timeseries', source, groupBy, regionId, speciesId, nameLanguage],
     queryFn: () =>
       fisheriesBreakdownApi.timeseries({
         group_by: groupBy,
@@ -47,8 +55,20 @@ export function FisheriesPage() {
         species_id: speciesId,
         top_n: 8,
         source,
+        language: nameLanguage,
       }),
   })
+
+  /** Series names: species/regions are data; the two synthetic series the
+   *  backend adds ("total", "other") are translated here. */
+  const seriesLabel = (s: CatchSeries) =>
+    s.key === 'total'
+      ? t('fisheries.chart.total')
+      : s.key === 'other'
+        ? t('fisheries.chart.other', { count: s.count ?? 0 })
+        : groupBy === 'region'
+          ? placeName(s.label)
+          : (s.vernacular_name ?? s.label)
 
   // Recharts wants one row per year with a column per series.
   const series = data.data?.series ?? []
@@ -62,7 +82,6 @@ export function FisheriesPage() {
   // Every number below is computed straight from `rows`/`series` above — the
   // same data the chart draws — rather than written as fixed text, so it
   // stays correct as the Break down by / Region / Species filters change.
-  const fmt = (n: number) => Math.round(n).toLocaleString()
   const totalByYear = rows.map((row) => {
     let sum = 0
     for (const s of series) sum += Number(row[s.key] ?? 0)
@@ -79,7 +98,7 @@ export function FisheriesPage() {
   const peakValue = totalByYear[peakIndex]
   const topSeries = series
     .filter((s) => s.key !== 'other' && s.key !== 'total')
-    .map((s) => ({ label: s.label, total: s.points.reduce((a, p) => a + p.tonnes, 0) }))
+    .map((s) => ({ label: seriesLabel(s), total: s.points.reduce((a, p) => a + p.tonnes, 0) }))
     .sort((a, b) => b.total - a.total)
     .slice(0, 3)
 
@@ -89,8 +108,17 @@ export function FisheriesPage() {
     enabled: speciesId !== undefined,
     retry: false,
   })
-  const regionName = (id: number) => filters.data?.regions.find((r) => r.region_id === id)?.name
+  const regionName = (id: number) => {
+    const name = filters.data?.regions.find((r) => r.region_id === id)?.name
+    return name ? placeName(name) : undefined
+  }
   const predictionUnavailable = prediction.error instanceof ApiError && prediction.error.status === 404
+  const selectedSpecies = filters.data?.species.find((s) => s.species_id === speciesId)
+  const selectedSpeciesName =
+    selectedSpecies?.vernacular_name ?? selectedSpecies?.common_name ?? t('fisheries.forecast.thisSpecies')
+  const selectClass =
+    'rounded-md border border-ocean-300 px-3 py-2 text-sm text-ocean-950 dark:border-ocean-700 dark:bg-ocean-900 dark:text-ocean-50'
+  const b = <strong />
 
   return (
     <div className="flex flex-col gap-6">
@@ -101,7 +129,7 @@ export function FisheriesPage() {
 
       <div className="flex flex-wrap items-end gap-3">
         <label className="flex flex-col gap-1 text-xs text-ocean-500">
-          Data source
+          {t('fisheries.filters.source')}
           <select
             value={source}
             onChange={(e) => {
@@ -111,54 +139,58 @@ export function FisheriesPage() {
               setRegionId(undefined)
               setSpeciesId(undefined)
             }}
-            className="rounded-md border border-ocean-300 px-3 py-2 text-sm text-ocean-950 dark:border-ocean-700 dark:bg-ocean-900 dark:text-ocean-50"
+            className={selectClass}
           >
-            <option value="FAO">FAO reported landings (1950–2024)</option>
-            <option value="SAU">Sea Around Us reconstruction (1950–2019)</option>
-          </select>
-        </label>
-
-        <label className="flex flex-col gap-1 text-xs text-ocean-500">
-          Break down by
-          <select
-            value={groupBy}
-            onChange={(e) => setGroupBy(e.target.value as GroupBy)}
-            className="rounded-md border border-ocean-300 px-3 py-2 text-sm text-ocean-950 dark:border-ocean-700 dark:bg-ocean-900 dark:text-ocean-50"
-          >
-            <option value="none">Total only</option>
-            <option value="species">Species</option>
-            <option value="region">{source === 'FAO' ? 'Region (FAO fishing area)' : 'Region (EEZ)'}</option>
-          </select>
-        </label>
-
-        <label className="flex flex-col gap-1 text-xs text-ocean-500">
-          Region
-          <select
-            value={regionId ?? ''}
-            onChange={(e) => setRegionId(e.target.value ? Number(e.target.value) : undefined)}
-            className="rounded-md border border-ocean-300 px-3 py-2 text-sm text-ocean-950 dark:border-ocean-700 dark:bg-ocean-900 dark:text-ocean-50"
-          >
-            <option value="">All regions</option>
-            {filters.data?.regions.map((r) => (
-              <option key={r.region_id} value={r.region_id}>
-                {r.name}
+            {SOURCES.map((s) => (
+              <option key={s} value={s}>
+                {t(`fisheries.sourceOption.${s}`)}
               </option>
             ))}
           </select>
         </label>
 
         <label className="flex flex-col gap-1 text-xs text-ocean-500">
-          Species
+          {t('fisheries.filters.groupBy')}
+          <select value={groupBy} onChange={(e) => setGroupBy(e.target.value as GroupBy)} className={selectClass}>
+            {GROUP_BY.map((g) => (
+              <option key={g} value={g}>
+                {g === 'region' ? t(`fisheries.groupBy.region_${source}`) : t(`fisheries.groupBy.${g}`)}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label className="flex flex-col gap-1 text-xs text-ocean-500">
+          {t('fisheries.filters.region')}
+          <select
+            value={regionId ?? ''}
+            onChange={(e) => setRegionId(e.target.value ? Number(e.target.value) : undefined)}
+            className={selectClass}
+          >
+            <option value="">{t('fisheries.filters.allRegions')}</option>
+            {filters.data?.regions.map((r) => (
+              <option key={r.region_id} value={r.region_id}>
+                {placeName(r.name)}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label className="flex flex-col gap-1 text-xs text-ocean-500">
+          {t('fisheries.filters.species')}
           <select
             value={speciesId ?? ''}
             onChange={(e) => setSpeciesId(e.target.value ? Number(e.target.value) : undefined)}
-            className="max-w-xs rounded-md border border-ocean-300 px-3 py-2 text-sm text-ocean-950 dark:border-ocean-700 dark:bg-ocean-900 dark:text-ocean-50"
+            className={`max-w-xs ${selectClass}`}
           >
-            <option value="">All species</option>
+            <option value="">{t('fisheries.filters.allSpecies')}</option>
             {/* Ordered by total catch, so the ones that matter are at the top. */}
             {filters.data?.species.map((s) => (
-              <option key={s.species_id} value={s.species_id}>
-                {s.common_name ?? s.scientific_name} ({s.total_tonnes.toLocaleString()} t)
+              // Species names are data: a sourced regional name where one
+              // exists, otherwise the English common or scientific name.
+              <option key={s.species_id} value={s.species_id} translate="no">
+                {s.vernacular_name ?? s.common_name ?? s.scientific_name} ({fmt.int(s.total_tonnes)}{' '}
+                {t('common.tonnesShort')})
               </option>
             ))}
           </select>
@@ -172,7 +204,7 @@ export function FisheriesPage() {
             }}
             className="rounded-md border border-ocean-300 px-3 py-2 text-sm text-ocean-600 dark:border-ocean-700 dark:text-ocean-300"
           >
-            Clear filters
+            {t('fisheries.filters.clear')}
           </button>
         )}
       </div>
@@ -180,7 +212,7 @@ export function FisheriesPage() {
       {data.isLoading ? (
         <LoadingRows rows={5} />
       ) : rows.length === 0 ? (
-        <p className="text-sm text-ocean-500">No catch records match those filters.</p>
+        <p className="text-sm text-ocean-500">{t('fisheries.noRecords')}</p>
       ) : (
         <>
           <div className="h-96 rounded-lg border border-ocean-200 p-4 dark:border-ocean-800">
@@ -190,20 +222,26 @@ export function FisheriesPage() {
               <AreaChart data={rows} margin={{ top: 8, right: 16, bottom: 8, left: 8 }}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="year" tick={{ fontSize: 11 }} minTickGap={24} />
-                <YAxis tick={{ fontSize: 11 }} unit=" t" width={70} />
+                <YAxis
+                  tick={{ fontSize: 11 }}
+                  tickFormatter={(v: number) => `${fmt.int(v)} ${t('common.tonnesShort')}`}
+                  width={90}
+                />
                 <Tooltip
-                  formatter={(value, name) => [`${Number(value).toLocaleString()} t`, String(name)]}
-                  labelFormatter={(l) => `Year ${l}`}
+                  formatter={(value, name) => [`${fmt.int(Number(value))} ${t('common.tonnesShort')}`, String(name)]}
+                  labelFormatter={(l) => t('fisheries.chart.year', { year: l })}
                   contentStyle={{ borderRadius: 8, border: '1px solid var(--color-ocean-200)', fontSize: 13 }}
                   labelStyle={{ fontWeight: 600, color: '#0f172a' }}
                 />
-                <Legend wrapperStyle={{ fontSize: 11 }} />
+                <Legend
+                  content={(props) => <ChartLegend payload={props.payload} dataNames={groupBy !== 'none'} />}
+                />
                 {series.map((s, i) => (
                   <Area
                     key={s.key}
                     type="monotone"
                     dataKey={s.key}
-                    name={s.label}
+                    name={seriesLabel(s)}
                     stackId="catch"
                     stroke={s.key === 'other' ? OTHER_COLOR : COLORS[i % COLORS.length]}
                     fill={s.key === 'other' ? OTHER_COLOR : COLORS[i % COLORS.length]}
@@ -216,7 +254,7 @@ export function FisheriesPage() {
 
           <div className="flex flex-wrap items-center gap-2 text-xs text-ocean-500">
             <DataSourceBadge source={source} />
-            <span>{data.data?.source}</span>
+            <span>{t(`fisheries.citation.${source}`)}</span>
           </div>
 
           {/* Every figure here is computed from the same data the chart
@@ -224,35 +262,56 @@ export function FisheriesPage() {
               so it updates automatically with the filters instead of going
               stale next to a chart that changed. */}
           <div className="rounded-lg border border-ocean-200 p-4 text-sm dark:border-ocean-800">
-            <h2 className="mb-2 font-semibold text-ocean-700 dark:text-ocean-200">What this chart shows</h2>
+            <h2 className="mb-2 font-semibold text-ocean-700 dark:text-ocean-200">{t('fisheries.summary.title')}</h2>
             <ul className="flex list-disc flex-col gap-1.5 pl-4 text-ocean-600 dark:text-ocean-300">
               <li>
-                Total catch across all {years.length} years ({firstYear}–{lastYear}):{' '}
-                <strong>{fmt(grandTotal)} tonnes</strong>.
+                <Trans
+                  i18nKey="fisheries.summary.total"
+                  values={{ count: years.length, first: firstYear, last: lastYear, total: fmt.int(grandTotal) }}
+                  components={{ b }}
+                />
               </li>
               <li>
-                Catch in {firstYear}: <strong>{fmt(firstYearTotal)} t</strong>. Catch in {lastYear}:{' '}
-                <strong>{fmt(lastYearTotal)} t</strong> —{' '}
+                <Trans
+                  i18nKey="fisheries.summary.firstLast"
+                  values={{
+                    first: firstYear,
+                    firstTotal: fmt.int(firstYearTotal),
+                    last: lastYear,
+                    lastTotal: fmt.int(lastYearTotal),
+                  }}
+                  components={{ b }}
+                />{' '}
                 {firstYearTotal > 0 ? (
-                  <>
-                    about <strong>{(lastYearTotal / firstYearTotal).toFixed(1)}×</strong> higher over that period.
-                  </>
+                  <Trans
+                    i18nKey={lastYearTotal >= firstYearTotal ? 'fisheries.summary.ratioHigher' : 'fisheries.summary.ratioLower'}
+                    values={{
+                      ratio: fmt.fixed(
+                        lastYearTotal >= firstYearTotal ? lastYearTotal / firstYearTotal : firstYearTotal / lastYearTotal,
+                        1,
+                      ),
+                    }}
+                    components={{ b }}
+                  />
                 ) : (
-                  'no catch recorded at the very start of the series to compare against.'
+                  t('fisheries.summary.noStart')
                 )}
               </li>
               <li>
-                Busiest year: <strong>{peakYear}</strong>, with <strong>{fmt(peakValue)} t</strong> caught — the
-                tallest point on the chart.
+                <Trans
+                  i18nKey="fisheries.summary.peak"
+                  values={{ year: peakYear, value: fmt.int(peakValue) }}
+                  components={{ b }}
+                />
               </li>
               {topSeries.length > 0 && (
                 <li>
-                  {groupBy === 'species' ? 'Top species' : 'Top region'} by total catch over the whole period:{' '}
+                  {groupBy === 'species' ? t('fisheries.summary.topSpecies') : t('fisheries.summary.topRegion')}{' '}
                   {topSeries.map((s, i) => (
                     <span key={s.label}>
-                      {i > 0 && (i === topSeries.length - 1 ? ', and ' : ', ')}
+                      {i > 0 && (i === topSeries.length - 1 ? t('common.listAnd') : ', ')}
                       <strong>
-                        {s.label} ({fmt(s.total)} t)
+                        <span translate="no">{s.label}</span> ({fmt.int(s.total)} {t('common.tonnesShort')})
                       </strong>
                     </span>
                   ))}
@@ -260,8 +319,7 @@ export function FisheriesPage() {
                 </li>
               )}
               <li>
-                The chart is <strong>stacked</strong>, so the height at any point on the x-axis is the total catch
-                that year — not a comparison of overlapping lines.
+                <Trans i18nKey="fisheries.summary.stacked" components={{ b }} />
               </li>
             </ul>
           </div>
@@ -269,37 +327,53 @@ export function FisheriesPage() {
       )}
 
       <div className="rounded-lg border border-ocean-200 p-4 text-sm dark:border-ocean-800">
-        <h2 className="mb-2 font-semibold text-ocean-700 dark:text-ocean-200">Catch forecast for {new Date().getFullYear() + 1}</h2>
+        <h2 className="mb-2 font-semibold text-ocean-700 dark:text-ocean-200">
+          {t('fisheries.forecast.title', { year: new Date().getFullYear() + 1 })}
+        </h2>
         {speciesId === undefined ? (
-          <p className="text-ocean-500">Pick a species above to forecast its catch for next year.</p>
+          <p className="text-ocean-500">{t('fisheries.forecast.pickSpecies')}</p>
         ) : prediction.isLoading ? (
           <LoadingRows rows={2} />
         ) : predictionUnavailable ? (
           <p className="text-ocean-500">
-            Not enough history for{' '}
-            {filters.data?.species.find((s) => s.species_id === speciesId)?.common_name ?? 'this species'} — the
-            model needs at least 6 consecutive annual observations.
+            <Trans
+              i18nKey="fisheries.forecast.notEnoughHistory"
+              values={{ name: selectedSpeciesName }}
+              components={{ name: <span translate="no" /> }}
+            />
           </p>
         ) : prediction.data ? (
           (() => {
             const p = prediction.data
             const delta = p.predicted_tonnes - p.last_observed_tonnes
             const pct = p.last_observed_tonnes > 0 ? (delta / p.last_observed_tonnes) * 100 : null
+            const region = regionName(p.region_id)
             return (
               <div className="flex flex-col gap-3">
                 <p className="text-ocean-600 dark:text-ocean-300">
-                  Forecast catch for <strong>{p.year}</strong>
                   {/* The model forecasts one region at a time; with "All
                       regions" selected the API picks the first, so name it. */}
-                  {regionName(p.region_id) && <> in {regionName(p.region_id)}</>}:{' '}
-                  <strong>{fmt(p.predicted_tonnes)} t</strong>{' '}
-                  (last real record: {fmt(p.last_observed_tonnes)} t in {p.last_observed_year}
+                  <Trans
+                    i18nKey={region ? 'fisheries.forecast.resultIn' : 'fisheries.forecast.result'}
+                    values={{
+                      year: p.year,
+                      region,
+                      value: fmt.int(p.predicted_tonnes),
+                      last: fmt.int(p.last_observed_tonnes),
+                      lastYear: p.last_observed_year,
+                    }}
+                    components={{ b }}
+                  />
                   {pct !== null && (
                     <>
-                      , {pct >= 0 ? 'up' : 'down'} about <strong>{Math.abs(pct).toFixed(1)}%</strong>
+                      {' '}
+                      <Trans
+                        i18nKey={pct >= 0 ? 'fisheries.forecast.up' : 'fisheries.forecast.down'}
+                        values={{ pct: fmt.fixed(Math.abs(pct), 1) }}
+                        components={{ b }}
+                      />
                     </>
                   )}
-                  ).
                 </p>
                 {p.horizon_years > 1 && (
                   <>
@@ -308,30 +382,32 @@ export function FisheriesPage() {
                         back in as the next year's input. Say so, and show
                         the path. */}
                     <p className="text-xs text-amber-500">
-                      The catch records end in {p.last_observed_year}, so this forecast is projected{' '}
-                      {p.horizon_years} years forward, each year built on the previous year&rsquo;s forecast. Treat
-                      it as a rough trend, not a precise figure &mdash; uncertainty grows with every year past{' '}
-                      {p.last_observed_year}.
+                      {t('fisheries.forecast.projected', { lastYear: p.last_observed_year, count: p.horizon_years })}
                     </p>
                     <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-ocean-500">
                       {p.path.map((pt) => (
                         <span key={pt.year}>
-                          {pt.year}: <strong>{fmt(pt.predicted_tonnes)} t</strong>
+                          {pt.year}: <strong>{fmt.int(pt.predicted_tonnes)} {t('common.tonnesShort')}</strong>
                         </span>
                       ))}
                     </div>
                   </>
                 )}
                 <p className="text-xs text-ocean-500">
-                  Model skill vs. a no-change baseline: {(p.skill.skill_vs_persistence * 100).toFixed(0)}%
-                  {p.skill.skill_vs_persistence <= 0.1 && ' — barely better than assuming no change; read this prediction loosely.'}
+                  {t('common.modelSkill', { value: fmt.int(p.skill.skill_vs_persistence * 100) })}
+                  {p.skill.skill_vs_persistence <= 0.1 && ` — ${t('fisheries.forecast.weakSkill')}`}
                 </p>
                 {p.top_features.length > 0 && (
                   <ul className="flex list-disc flex-col gap-1 pl-4 text-xs text-ocean-500">
                     {p.top_features.slice(0, 3).map((f) => (
                       <li key={f.feature}>
-                        <strong>{f.feature}</strong> pushed the prediction {f.direction} (contribution{' '}
-                        {f.contribution.toFixed(3)}).
+                        {t(f.direction === 'decreased' ? 'fisheries.forecast.driverDown' : 'fisheries.forecast.driverUp', {
+                          feature: tDynamic(`fisheries.feature.${f.feature}`, f.feature),
+                          contribution: fmt.fixed(f.contribution, 3),
+                        })}{' '}
+                        <span translate="no" className="font-mono opacity-70">
+                          ({f.feature})
+                        </span>
                       </li>
                     ))}
                   </ul>
@@ -344,39 +420,17 @@ export function FisheriesPage() {
       </div>
 
       <div className="rounded-lg border border-ocean-200 p-4 text-sm dark:border-ocean-800">
-        <h2 className="mb-1 font-semibold text-ocean-700 dark:text-ocean-200">About this breakdown</h2>
+        <h2 className="mb-1 font-semibold text-ocean-700 dark:text-ocean-200">{t('fisheries.about.title')}</h2>
         <ul className="flex list-disc flex-col gap-1 pl-4 text-ocean-500">
           {/* The doc asked for a Kerala/Goa/Odisha split. It isn't available,
               and saying so is better than inventing a state attribution. */}
-          {source === 'FAO' ? (
-            <li>
-              Region here means <strong>FAO major fishing area</strong>, not Indian state — Area 51 is the Arabian
-              Sea (west) coast, Area 57 the Bay of Bengal (east) coast and Andaman &amp; Nicobar. FAO does not
-              report a state-level split (Kerala / Goa / Odisha).
-            </li>
-          ) : (
-            <li>
-              Region here means <strong>EEZ</strong>, not Indian state — Sea Around Us reports catch by exclusive
-              economic zone, so a state-level split (Kerala / Goa / Odisha) is not derivable from this source.
-            </li>
-          )}
           <li>
-            Grouping by species charts the eight largest by total catch; the remainder are summed into
-            &ldquo;Other&rdquo; so the yearly totals still add up.
+            <Trans i18nKey={`fisheries.about.region_${source}`} components={{ b }} />
           </li>
-          {source === 'FAO' ? (
-            <li>
-              These are <strong>officially reported landings</strong> (FAO Global Capture Production, CC BY 4.0).
-              They exclude discards and unreported catch, so they run well below the Sea Around Us reconstruction
-              &mdash; the two are different measurements and must not be compared year-for-year or summed. Some
-              species only appear once India began reporting them separately (e.g. black pomfret from 2019).
-            </li>
-          ) : (
-            <li>
-              These are <strong>reconstructed</strong> figures including estimated discards and unreported catch.
-              They are not comparable with the FAO reported-landings series and must not be summed with it.
-            </li>
-          )}
+          <li>{t('fisheries.about.grouping')}</li>
+          <li>
+            <Trans i18nKey={`fisheries.about.measure_${source}`} components={{ b }} />
+          </li>
         </ul>
       </div>
     </div>

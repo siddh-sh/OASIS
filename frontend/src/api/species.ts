@@ -56,7 +56,9 @@ export interface VernacularNameEntry {
 
 export const speciesExtrasApi = {
   photos: (speciesId: number) => apiFetch<SpeciesPhotos>(`/api/species/${speciesId}/photos?limit=6`),
-  context: (speciesId: number) => apiFetch<SpeciesContext>(`/api/species/${speciesId}/context`),
+  /** The explanation is written by the model in `language`. */
+  context: (speciesId: number, language = 'en') =>
+    apiFetch<SpeciesContext>(`/api/species/${speciesId}/context${toQuery({ language })}`),
   regions: (speciesId: number) => apiFetch<{ regions: SpeciesRegion[] }>(`/api/species/${speciesId}/regions`),
   vernacularNames: (speciesId: number) =>
     apiFetch<{ names: Record<string, VernacularNameEntry> }>(`/api/species/${speciesId}/vernacular-names`),

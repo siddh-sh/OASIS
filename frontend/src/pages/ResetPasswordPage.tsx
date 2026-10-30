@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom'
 import { isPasswordValid } from '@/auth/passwordPolicy'
 import { LanguageSwitcher } from '@/components/LanguageSwitcher'
 import { PasswordChecklist } from '@/components/PasswordChecklist'
+import { describeAuthError } from '@/i18n/errors'
 import { resetPassword } from '@/store/auth'
 
 const inputClass = 'rounded-md border border-ocean-300 px-3 py-2 text-sm dark:border-ocean-700 dark:bg-ocean-950'
@@ -27,7 +28,7 @@ export function ResetPasswordPage() {
   const [confirm, setConfirm] = useState('')
   const [saving, setSaving] = useState(false)
   const [done, setDone] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<unknown>(null)
 
   const mismatch = confirm.length > 0 && confirm !== password
 
@@ -42,7 +43,7 @@ export function ResetPasswordPage() {
       window.history.replaceState(null, '', window.location.pathname)
       setDone(true)
     } catch (err) {
-      setError((err as Error).message)
+      setError(err)
     } finally {
       setSaving(false)
     }
@@ -59,7 +60,11 @@ export function ResetPasswordPage() {
         {done ? (
           <p className="text-sm text-kelp-500">{t('login.resetDone')}</p>
         ) : !token ? (
-          <p className="text-sm text-coral-500">{linkError ?? t('login.resetLinkInvalid')}</p>
+          // Supabase's own wording for an expired link is English; the
+          // reason is the same either way, so the dictionary text is shown.
+          <p className="text-sm text-coral-500" title={linkError ?? undefined}>
+            {t('login.resetLinkInvalid')}
+          </p>
         ) : (
           <form onSubmit={handleSubmit} className="flex flex-col gap-3">
             <input
@@ -82,7 +87,7 @@ export function ResetPasswordPage() {
               className={inputClass}
             />
             {mismatch && <p className="text-sm text-coral-500">{t('login.passwordsDontMatch')}</p>}
-            {error && <p className="text-sm text-coral-500">{error}</p>}
+            {error != null && <p className="text-sm text-coral-500">{describeAuthError(error, 'reset')}</p>}
             <button
               type="submit"
               disabled={saving || !isPasswordValid(password) || confirm !== password}

@@ -103,12 +103,17 @@ def correlate(db: Session, var1: str, var2: str, region: str | None = None) -> d
     s2 = _monthly_series(db, var2, region)
     joined = pd.concat([s1, s2], axis=1, join="inner").dropna()
 
-    notes = []
+    # Each caveat is returned twice: `notes` as English prose for API and
+    # chatbot consumers, `note_codes` as a stable code plus its numbers so
+    # the UI can render it in the reader's language.
+    notes: list[str] = []
+    note_codes: list[dict] = []
     if region and "ocean" in (VARIABLES[var1]["domain"], VARIABLES[var2]["domain"]):
         notes.append(
             "Region filters do not apply to satellite variables: grid cells sit in "
             "open ocean and carry no region_id, so those series remain national."
         )
+        note_codes.append({"code": "region_ignored"})
 
     if len(joined) < MIN_MONTHS:
         return {
@@ -117,6 +122,7 @@ def correlate(db: Session, var1: str, var2: str, region: str | None = None) -> d
             "pearson_r": None, "p_value": None, "significant": False,
             "points": [],
             "notes": [*notes, f"Only {len(joined)} overlapping months — too few to correlate."],
+            "note_codes": [*note_codes, {"code": "too_few_months", "n": int(len(joined))}],
         }
 
     a = joined[var1].to_numpy(dtype=float)
@@ -128,15 +134,18 @@ def correlate(db: Session, var1: str, var2: str, region: str | None = None) -> d
         notes.append(
             f"Based on {len(joined)} monthly points; treat the coefficient as indicative, not conclusive."
         )
+        note_codes.append({"code": "indicative", "n": int(len(joined))})
     notes.append(
         "Computed on spatial means across stations — this describes national month-to-month "
         "co-movement, not a relationship at any single location."
     )
+    note_codes.append({"code": "spatial_means"})
     if "chlorophyll_a" in (var1, var2):
         notes.append(
             "Chlorophyll uses the monthly median, not the mean: its values are heavily skewed, "
             "and a mean would follow a few turbid coastal cells rather than the basin."
         )
+        note_codes.append({"code": "chlorophyll_median"})
 
     return {
         "var1": var1, "var2": var2, "region": region,
@@ -152,6 +161,7 @@ def correlate(db: Session, var1: str, var2: str, region: str | None = None) -> d
             for idx, x, y in zip(joined.index, a, b, strict=True)
         ],
         "notes": notes,
+        "note_codes": note_codes,
     }
 
 

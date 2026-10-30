@@ -1,6 +1,9 @@
 import { useEffect, useRef } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
 import reef from '@/assets/home/reef.webp'
+import { useFormat } from '@/i18n/format'
+import { formatCount, usePlatformStats } from './hooks'
 import { ArrowRight, ChevronDown } from './icons'
 
 // Fixed, not random: deterministic layout means no layout shift between
@@ -21,7 +24,72 @@ const RAYS = [
   { left: '80%', r: '34deg', delay: '-1.5s' },
 ]
 
+/** India's annual catch as a tiny line — the real FAO series, last 30 years. */
+function CatchSparkline({ series }: { series: { year: number; catch_metric_tons: number }[] }) {
+  const pts = series.slice(-30)
+  if (pts.length < 2) return null
+  const max = Math.max(...pts.map((p) => p.catch_metric_tons))
+  const min = Math.min(...pts.map((p) => p.catch_metric_tons))
+  const d = pts
+    .map((p, i) => `${(i / (pts.length - 1)) * 120},${28 - ((p.catch_metric_tons - min) / (max - min || 1)) * 24}`)
+    .join(' ')
+  return (
+    <svg viewBox="0 0 120 30" className="mt-2 h-7 w-full" aria-hidden>
+      <polyline points={d} fill="none" stroke="#FF6384" strokeWidth="1.6" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+function Panel({ className, label, value, unit, note, valueClass = 'text-2xl', children }: {
+  className: string; label: string; value: string; unit?: string; note: string; valueClass?: string; children?: React.ReactNode
+}) {
+  return (
+    <div className={`glass absolute w-52 rounded-2xl px-4 py-3 ${className}`}>
+      <p className="text-[10px] font-medium tracking-[0.18em] text-[#36E0D0] uppercase">{label}</p>
+      <p className={`mt-1 font-semibold text-[#F4FAFC] ${valueClass}`}>
+        {value}
+        {unit && <span className="ml-1 text-sm font-normal text-[var(--muted)]">{unit}</span>}
+      </p>
+      <p className="text-xs text-[var(--muted)]">{note}</p>
+      {children}
+    </div>
+  )
+}
+
+/**
+ * Foreground layer: real platform figures, from the same hooks (and cache)
+ * as the dashboard's KPI row. Desktop only — on smaller screens they would
+ * crowd the headline, and the same figures appear in the preview below.
+ */
+function HeroPanels() {
+  const { t } = useTranslation()
+  const fmt = useFormat()
+  const stats = usePlatformStats()
+  if (stats.failed) return null
+  const latest = stats.latestCatch
+  return (
+    <aside aria-label={t('home.hero.statsLabel')} className="pointer-events-none absolute inset-y-0 right-0 hidden w-[30%] xl:block">
+      <Panel className="float-a top-[20%] right-[12%]" label={t('home.hero.temp')}
+        value={stats.avgSst === undefined ? '—' : fmt.fixed(stats.avgSst, 1)} unit="°C"
+        note={t('home.hero.tempNote', { n: formatCount(stats.sstCount) })} />
+      <Panel className="float-b top-[40%] right-[3%]" label={t('home.hero.bio')}
+        value={formatCount(stats.speciesCount)} note={t('home.hero.bioNote')} />
+      <Panel className="float-c top-[59%] right-[15%]" label={t('home.hero.obs')}
+        value={formatCount(stats.weatherCount)} note={t('home.hero.obsNote')} />
+      <Panel className="float-a top-[73%] right-[4%]" label={t('home.hero.fish')}
+        value={t('home.hero.fishValue')} valueClass="text-base"
+        note={latest ? t('home.hero.fishNoteYear', { year: latest.year }) : t('home.hero.fishNote')}>
+        <CatchSparkline series={stats.catchSeries} />
+      </Panel>
+      <p className="absolute top-[15%] right-[12%] text-[10px] tracking-[0.2em] text-[var(--muted)] uppercase">
+        {t('home.hero.statsCaption')}
+      </p>
+    </aside>
+  )
+}
+
 export function HeroSection() {
+  const { t } = useTranslation()
   const imageRef = useRef<HTMLImageElement>(null)
   const heroRef = useRef<HTMLElement>(null)
 
@@ -70,26 +138,28 @@ export function HeroSection() {
         </svg>
       </div>
 
+      {/* Layer 3 — floating glass panels */}
+      <HeroPanels />
+
       {/* Layer 2 — content */}
       <div className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="max-w-4xl">
-          <p className="eyebrow sm:!text-sm">Discover • Understand • Protect</p>
+          <p className="eyebrow sm:!text-sm">{t('home.hero.eyebrow')}</p>
           <h1 className="font-display mt-6 text-[clamp(3rem,min(7.4vw,11vh),6.75rem)] leading-[1.02] font-medium">
-            Explore the Ocean.
+            {t('home.hero.line1')}
             <br />
-            Understand <span className="text-gradient whitespace-nowrap italic">Our Future.</span>
+            {t('home.hero.line2')} <span className="text-gradient whitespace-nowrap italic">{t('home.hero.accent')}</span>
           </h1>
           <p className="mt-8 max-w-2xl text-lg leading-relaxed text-[var(--muted)] sm:text-xl lg:text-2xl lg:leading-relaxed">
-            From shifting ocean temperatures to marine biodiversity and sustainable fisheries, OASIS transforms
-            complex marine data into meaningful insights for a healthier blue planet.
+            {t('home.hero.lead')}
           </p>
           <div className="mt-11 flex flex-wrap items-center gap-4">
             <Link to="/dashboard" data-cursor="primary"
               className="btn-primary inline-flex items-center gap-2.5 rounded-full px-8 py-4 text-base sm:text-lg">
-              Explore the Platform <ArrowRight size={20} />
+              {t('home.hero.explore')} <ArrowRight size={20} />
             </Link>
             <a href="#mission" className="btn-ghost inline-flex items-center rounded-full px-8 py-4 text-base sm:text-lg">
-              Discover Our Mission
+              {t('home.hero.mission')}
             </a>
           </div>
         </div>
@@ -97,7 +167,7 @@ export function HeroSection() {
 
       <div className="absolute inset-x-0 bottom-6 flex justify-center">
         <a href="#mission" className="scroll-cue flex flex-col items-center gap-1 text-xs tracking-[0.3em] text-[var(--muted)]">
-          SCROLL TO EXPLORE
+          <span className="uppercase">{t('home.hero.scroll')}</span>
           <ChevronDown size={16} />
         </a>
       </div>

@@ -1,13 +1,15 @@
 import { useQuery } from '@tanstack/react-query'
 import { memo } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
 import { analyticsApi } from '@/api/analytics'
+import { useFormat } from '@/i18n/format'
 import type { Station } from '@/types/api'
 import { formatCount, useNearViewport, usePlatformStats, useReveal } from './hooks'
 import { ArrowRight } from './icons'
 
 // Mirrors NavSidebar's entries so the preview reads as the real product.
-const NAV = ['Dashboard', 'Ocean & Satellite', 'Weather', 'Species', 'Fisheries', 'Molecular / eDNA', 'Correlation', 'Risk & Alerts', 'NL Chatbot']
+const NAV = ['dashboard', 'ocean', 'weather', 'species', 'fisheries', 'molecular', 'correlation', 'alerts', 'chatbot'] as const
 
 // Same colours as MapView's STATION_STYLES, so a visitor recognises them later.
 const KIND_COLOR: Record<string, string> = {
@@ -16,13 +18,13 @@ const KIND_COLOR: Record<string, string> = {
   'in-situ-buoy': '#A78BFA',
 }
 
-const StationMap = memo(function StationMap({ stations, anomalyIds }: { stations: Station[]; anomalyIds: Set<number> }) {
+const StationMap = memo(function StationMap({ stations, anomalyIds, label }: { stations: Station[]; anomalyIds: Set<number>; label: string }) {
   // Covers the satellite grid, the coast and the equatorial RAMA buoys.
   const x = (lon: number) => ((lon - 62) / 36) * 360
   const y = (lat: number) => ((26 - lat) / 34) * 240
   return (
     <svg viewBox="0 0 360 240" className="h-full w-full" role="img"
-      aria-label={`Map of ${stations.length} ocean stations, with ${anomalyIds.size} recent anomalies marked`}>
+      aria-label={label}>
       {[0, 10, 20].map((lat) => (
         <g key={lat}>
           <line x1="0" x2="360" y1={y(lat)} y2={y(lat)} stroke="rgba(167,243,229,0.08)" strokeDasharray="2 5" />
@@ -59,6 +61,8 @@ function Tile({ label, value, unit }: { label: string; value: string; unit?: str
 }
 
 export function DashboardPreview() {
+  const { t } = useTranslation()
+  const fmt = useFormat()
   const stats = usePlatformStats()
   const heading = useReveal()
   const frame = useReveal()
@@ -82,9 +86,9 @@ export function DashboardPreview() {
     <section className="relative py-24 sm:py-32">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div ref={heading} className="reveal mx-auto max-w-3xl text-center">
-          <p className="eyebrow">The platform</p>
+          <p className="eyebrow">{t('home.preview.eyebrow')}</p>
           <h2 className="font-display mt-4 text-4xl leading-tight font-medium sm:text-5xl">
-            From Ocean Data to <span className="text-gradient">Ocean Intelligence.</span>
+            {t('home.preview.title')} <span className="text-gradient">{t('home.preview.accent')}</span>
           </h2>
         </div>
 
@@ -95,38 +99,39 @@ export function DashboardPreview() {
               <span className="h-2.5 w-2.5 rounded-full bg-[#FF6384]/70" />
               <span className="h-2.5 w-2.5 rounded-full bg-[#F59E0B]/70" />
               <span className="h-2.5 w-2.5 rounded-full bg-[#36E0D0]/70" />
-              <span className="ml-3 rounded-full bg-black/25 px-3 py-0.5 text-[11px] text-[var(--muted)]">oasis / dashboard</span>
+              <span translate="no" className="ml-3 rounded-full bg-black/25 px-3 py-0.5 text-[11px] text-[var(--muted)]">oasis / dashboard</span>
             </div>
             <div className="flex overflow-hidden rounded-2xl border border-[#0a3b55] bg-[#041f2e]">
               <aside className="hidden w-44 shrink-0 border-r border-[#0a3b55] p-3 md:block" aria-hidden>
-                <p className="px-2 pb-3 text-sm font-semibold">OASIS</p>
+                <p className="px-2 pb-3 text-sm font-semibold">{t('nav.appName')}</p>
                 {NAV.map((n, i) => (
-                  <p key={n} className={`truncate rounded-md px-2 py-1.5 text-[11px] ${i === 0 ? 'bg-[#146b8f] text-white' : 'text-[#b7e0ee]/80'}`}>{n}</p>
+                  <p key={n} className={`truncate rounded-md px-2 py-1.5 text-[11px] ${i === 0 ? 'bg-[#146b8f] text-white' : 'text-[#b7e0ee]/80'}`}>{t(`nav.${n}`)}</p>
                 ))}
               </aside>
               <div className="min-w-0 flex-1 p-4 sm:p-5">
-                <p className="text-base font-semibold text-[#e0f3f8]">Dashboard</p>
-                <p className="text-[11px] text-[#3ba3c7]">Overview of every data domain</p>
+                <p className="text-base font-semibold text-[#e0f3f8]">{t('pages.dashboard.title')}</p>
+                <p className="text-[11px] text-[#3ba3c7]">{t('home.preview.subtitle')}</p>
                 <div className="mt-4 grid grid-cols-2 gap-2.5 sm:grid-cols-3 xl:grid-cols-6">
-                  <Tile label="Ocean stations" value={formatCount(stats.stationCount)} />
-                  <Tile label="Avg SST" value={stats.avgSst !== undefined ? stats.avgSst.toFixed(1) : '—'} unit="°C" />
-                  <Tile label="Species catalogued" value={formatCount(stats.speciesCount)} />
-                  <Tile label="Molecular records" value={formatCount(stats.molecularCount)} />
-                  <Tile label="Weather observations" value={formatCount(stats.weatherCount)} />
-                  <Tile label="Latest annual catch" value={latest ? Math.round(latest.catch_metric_tons).toLocaleString() : '—'} unit={latest ? 't' : undefined} />
+                  <Tile label={t('dashboard.kpi.oceanStations')} value={formatCount(stats.stationCount)} />
+                  <Tile label={t('dashboard.kpi.avgSst')} value={stats.avgSst !== undefined ? fmt.fixed(stats.avgSst, 1) : '—'} unit="°C" />
+                  <Tile label={t('dashboard.kpi.species')} value={formatCount(stats.speciesCount)} />
+                  <Tile label={t('dashboard.kpi.molecular')} value={formatCount(stats.molecularCount)} />
+                  <Tile label={t('dashboard.kpi.weather')} value={formatCount(stats.weatherCount)} />
+                  <Tile label={t('dashboard.kpi.latestCatch')} value={latest ? fmt.int(latest.catch_metric_tons) : '—'} unit={latest ? 't' : undefined} />
                 </div>
                 <div className="mt-4 flex flex-wrap items-baseline justify-between gap-2">
-                  <p className="text-[12px] font-semibold text-[#b7e0ee]">Station & sensor coverage</p>
+                  <p className="text-[12px] font-semibold text-[#b7e0ee]">{t('dashboard.mapTitle')}</p>
                   <div className="flex flex-wrap gap-3 text-[10px] text-[#7cc4dd]">
-                    <span className="flex items-center gap-1"><i className="h-2 w-2 rounded-full bg-[#13C7DE]" /> Satellite grid</span>
-                    <span className="flex items-center gap-1"><i className="h-2 w-2 rounded-full bg-[#F59E0B]" /> Coastal</span>
-                    <span className="flex items-center gap-1"><i className="h-2 w-2 rounded-full bg-[#A78BFA]" /> Moored buoy</span>
-                    <span className="flex items-center gap-1"><i className="h-2 w-2 rounded-full border border-[#FF6384]" /> Recent high/critical anomaly</span>
+                    <span className="flex items-center gap-1"><i className="h-2 w-2 rounded-full bg-[#13C7DE]" /> {t('home.preview.satellite')}</span>
+                    <span className="flex items-center gap-1"><i className="h-2 w-2 rounded-full bg-[#F59E0B]" /> {t('home.preview.coastal')}</span>
+                    <span className="flex items-center gap-1"><i className="h-2 w-2 rounded-full bg-[#A78BFA]" /> {t('home.preview.buoy')}</span>
+                    <span className="flex items-center gap-1"><i className="h-2 w-2 rounded-full border border-[#FF6384]" /> {t('home.preview.anomaly')}</span>
                   </div>
                 </div>
                 <div className="mt-2 aspect-[3/2] max-h-[380px] w-full rounded-xl border border-[#0a3b55] bg-[#031B2A] p-2 sm:aspect-[2/1]">
                   {stats.stations.data ? (
-                    <StationMap stations={stats.stations.data.items} anomalyIds={anomalyIds} />
+                    <StationMap stations={stats.stations.data.items} anomalyIds={anomalyIds}
+                      label={t('home.preview.mapLabel', { n: formatCount(stats.stations.data.items.length), a: formatCount(anomalyIds.size) })} />
                   ) : (
                     <div className="h-full animate-pulse rounded-lg bg-white/5" />
                   )}
@@ -137,9 +142,9 @@ export function DashboardPreview() {
         </div>
 
         <div className="mt-10 flex flex-col items-center gap-5 text-center">
-          <p className="text-sm text-[var(--muted)]">Connected marine observations. Clearer environmental insights.</p>
+          <p className="text-sm text-[var(--muted)]">{t('home.preview.caption')}</p>
           <Link to="/dashboard" data-cursor="primary" className="btn-primary inline-flex items-center gap-2 rounded-full px-6 py-3.5 text-[15px]">
-            Enter OASIS Dashboard <ArrowRight size={18} />
+            {t('home.preview.cta')} <ArrowRight size={18} />
           </Link>
         </div>
       </div>

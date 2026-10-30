@@ -100,6 +100,8 @@ class CatchDeclineOut(BaseModel):
     species_id: int
     scientific_name: str | None
     common_name: str | None
+    # Regional name (or phonetic rendering) in the requested language.
+    vernacular_name: str | None = None
     slope_tonnes_per_year: float
     pct_per_year: float
     n_years: int

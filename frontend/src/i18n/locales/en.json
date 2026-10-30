@@ -11,18 +11,64 @@
     "correlation": "Correlation Studio",
     "alerts": "Risk & Anomaly Alerts",
     "chatbot": "NL Chatbot",
-    "admin": "Admin / Data Status"
+    "admin": "Admin / Data Status",
+    "home": "Home page"
   },
   "header": {
     "viewingAs": "Viewing as",
     "settings": "Settings",
     "logOut": "Log out",
     "notSignedIn": "Not signed in",
-    "language": "Language"
+    "language": "Language",
+    "openMenu": "Open menu",
+    "closeMenu": "Close menu",
+    "collapseMenu": "Collapse menu",
+    "expandMenu": "Expand menu"
+  },
+  "roles": {
+    "researcher": "Researcher",
+    "admin": "Admin"
+  },
+  "viewMode": {
+    "researcher": {
+      "label": "Researcher",
+      "blurb": "Scientific names first, full taxonomy, raw figures and model diagnostics."
+    },
+    "fisherman": {
+      "label": "Fisherman",
+      "blurb": "Common names first, plain language, practical figures. Jargon hidden."
+    },
+    "student": {
+      "label": "Student",
+      "blurb": "Both names, with explanatory context on what each measure means."
+    },
+    "policy": {
+      "label": "Policy maker",
+      "blurb": "Common names, trends and totals emphasised over per-record detail."
+    }
+  },
+  "common": {
+    "all": "All",
+    "yes": "yes",
+    "no": "no",
+    "loading": "Loading…",
+    "sources": "Sources:",
+    "sourceTooltip": "Source: {{source}}",
+    "tonnesShort": "t",
+    "listAnd": ", and ",
+    "modelSkill": "Model skill vs. a no-change baseline: {{value}}%"
+  },
+  "errors": {
+    "generic": "Something went wrong.",
+    "network": "Can't reach the server. Check your connection and that the backend is running.",
+    "notAuthorized": "You're not authorised to do that.",
+    "notFound": "Not found.",
+    "invalidRequest": "The request was not valid.",
+    "rateLimited": "Too many requests right now — please wait a moment and try again.",
+    "unavailable": "This service is temporarily unavailable.",
+    "server": "The server ran into an error."
   },
   "login": {
-    "alreadySignedIn": "You're already signed in.",
-    "continueToDashboard": "Continue to dashboard",
     "tagline": "Unified oceanographic, fisheries & biodiversity intelligence",
     "loginTab": "Login",
     "signupTab": "Signup",
@@ -47,7 +93,18 @@
     "passwordsDontMatch": "Passwords don't match.",
     "setNewPassword": "Update password",
     "resetDone": "Your password has been updated. You can now log in with it.",
-    "resetLinkInvalid": "This reset link is invalid or has expired. Request a new one from the login page."
+    "resetLinkInvalid": "This reset link is invalid or has expired. Request a new one from the login page.",
+    "errors": {
+      "invalidCredentials": "Incorrect email or password.",
+      "alreadyRegistered": "An account with this email already exists. Log in, or reset your password.",
+      "tooManyResetEmails": "Too many password reset emails have been sent recently. Please wait a while (up to an hour) and try again.",
+      "checkInput": "Please check what you entered."
+    },
+    "alreadySignedIn": "You're already signed in.",
+    "continueToDashboard": "Continue to dashboard",
+    "showPassword": "Show password",
+    "hidePassword": "Hide password",
+    "welcomeBack": "Welcome back"
   },
   "password": {
     "requirements": "Password requirements",
@@ -63,7 +120,10 @@
     }
   },
   "pages": {
-    "dashboard": { "title": "Dashboard", "subtitle": "Overview across all six data domains" },
+    "dashboard": {
+      "title": "Dashboard",
+      "subtitle": "Overview across all six data domains"
+    },
     "ocean": {
       "title": "Ocean & Satellite Explorer",
       "subtitle": "Satellite SST/chlorophyll grid + in-situ RAMA buoys — click a station for its time series."
@@ -74,15 +134,16 @@
     },
     "species": {
       "title": "Species / Biodiversity Explorer",
-      "subtitle": "Deduplicated across OBIS, GBIF, BOLD and Sea Around Us by binomial scientific name."
+      "subtitle": "Deduplicated across OBIS, GBIF, BOLD, FAO and Sea Around Us by binomial scientific name."
     },
     "fisheries": {
       "title": "Fisheries Insights",
-      "subtitle": "Sea Around Us reconstructed catch, 1950–2019, broken down by species and EEZ."
+      "subtitle": "Catch by species and region — FAO reported landings (to 2024) or the Sea Around Us reconstruction (to 2019)."
     },
     "molecular": {
       "title": "Molecular — DNA barcode reference library",
-      "subtitle": "1,993 DNA barcodes from BOLD Systems, collected in India."
+      "subtitle_one": "{{total}} DNA barcode from BOLD Systems, collected in India.",
+      "subtitle_other": "{{total}} DNA barcodes from BOLD Systems, collected in India."
     },
     "correlation": {
       "title": "Correlation Studio",
@@ -100,5 +161,641 @@
       "title": "Admin / Data Status",
       "subtitle": "Dataset sync status, licenses, and Cleaning Agent notes."
     }
+  },
+  "dashboard": {
+    "kpi": {
+      "oceanStations": "Ocean stations",
+      "avgSst": "Avg sea surface temp.",
+      "species": "Species catalogued",
+      "molecular": "Molecular records",
+      "weather": "Weather observations",
+      "latestCatch": "Latest annual catch",
+      "latestCatchUnit": "t ({{year}})"
+    },
+    "mapTitle": "Station & sensor coverage",
+    "stationCount_one": "{{formatted}} station",
+    "stationCount_other": "{{formatted}} stations"
+  },
+  "map": {
+    "legendTitle": "Station type",
+    "kind": {
+      "satellite-grid": "Satellite grid cell",
+      "coastal-anchor": "Coastal station",
+      "in-situ-buoy": "Moored buoy",
+      "occurrence": "Species sighting"
+    },
+    "gridCell": "Grid cell {{id}}",
+    "zoomIn": "Zoom in",
+    "zoomOut": "Zoom out",
+    "closePopup": "Close",
+    "hemisphere": {
+      "N": "N",
+      "S": "S",
+      "E": "E",
+      "W": "W"
+    }
+  },
+  "ocean": {
+    "stationType": "Station type",
+    "stationsMatched_one": "{{formatted}} station matched",
+    "stationsMatched_other": "{{formatted}} stations matched",
+    "stationNumber": "Station #{{id}}",
+    "hover": {
+      "sst": "SST {{value}}°C",
+      "chlorophyll": "Chl-a {{value}} mg/m³",
+      "asOf": "as of {{date}}",
+      "selected": "selected"
+    },
+    "viewReadings": "{{name}} — view readings",
+    "readingsTitle": "Station #{{id}} readings",
+    "series": {
+      "sst": "Sea surface temperature",
+      "chlorophyll_a": "Chlorophyll-a"
+    },
+    "variable": {
+      "sst": "Sea surface temperature",
+      "chlorophyll_a": "Chlorophyll-a"
+    },
+    "noReadings": "No readings for this station in range.",
+    "forecast": {
+      "title": "Short-term forecast",
+      "variable": "Variable",
+      "stepsAhead": "Steps ahead",
+      "stepOption_one": "{{count}} (×8 days)",
+      "stepOption_other": "{{count}} (×8 days)",
+      "noHistory": "No usable {{variable}} history for this station — satellite chlorophyll in particular covers fewer stations than SST.",
+      "weakSkill": "barely better than assuming tomorrow looks like today; read these numbers loosely.",
+      "compounds": "Each step compounds the last, so the further right, the less to trust it."
+    }
+  },
+  "weather": {
+    "station": "Station",
+    "priorityOnly": "Kerala, Goa & Odisha only",
+    "unavailable": "Live forecast unavailable: {{message}}",
+    "feelsLike": "Feels like {{value}}°C",
+    "humidity": "Humidity",
+    "wind": "Wind",
+    "rainNow": "Rain now",
+    "pressure": "Pressure",
+    "uvToday": "UV (today max)",
+    "sun": "Sun",
+    "next24": "Next 24 hours",
+    "next7": "Next 7 days",
+    "rainChance": "Chance of rain",
+    "rainPct": "{{value}}% rain",
+    "sourceNote": "Open-Meteo forecast API (live, not stored). Not available: air quality index (separate Open-Meteo service, not integrated).",
+    "mapTitle": "Station map — hover a point for its name and coordinates",
+    "showForecastFor": "Show forecast for {{name}}",
+    "historyTitle": "Historical record — {{region}} (ERA5, from the database)",
+    "allRegions": "all regions",
+    "maxTemp": "Max temp",
+    "minTemp": "Min temp",
+    "units": {
+      "kmh": "km/h",
+      "mm": "mm"
+    },
+    "codes": {
+      "0": "Clear sky",
+      "1": "Mainly clear",
+      "2": "Partly cloudy",
+      "3": "Overcast",
+      "45": "Fog",
+      "48": "Depositing rime fog",
+      "51": "Light drizzle",
+      "53": "Moderate drizzle",
+      "55": "Dense drizzle",
+      "56": "Light freezing drizzle",
+      "57": "Dense freezing drizzle",
+      "61": "Slight rain",
+      "63": "Moderate rain",
+      "65": "Heavy rain",
+      "66": "Light freezing rain",
+      "67": "Heavy freezing rain",
+      "71": "Slight snow",
+      "73": "Moderate snow",
+      "75": "Heavy snow",
+      "77": "Snow grains",
+      "80": "Slight rain showers",
+      "81": "Moderate rain showers",
+      "82": "Violent rain showers",
+      "85": "Slight snow showers",
+      "86": "Heavy snow showers",
+      "95": "Thunderstorm",
+      "96": "Thunderstorm with slight hail",
+      "99": "Thunderstorm with heavy hail"
+    },
+    "compass": {
+      "N": "N",
+      "NNE": "NNE",
+      "NE": "NE",
+      "ENE": "ENE",
+      "E": "E",
+      "ESE": "ESE",
+      "SE": "SE",
+      "SSE": "SSE",
+      "S": "S",
+      "SSW": "SSW",
+      "SW": "SW",
+      "WSW": "WSW",
+      "W": "W",
+      "WNW": "WNW",
+      "NW": "NW",
+      "NNW": "NNW"
+    }
+  },
+  "species": {
+    "commonNamesNote": "Showing common names where we have them.",
+    "search": "Search",
+    "searchPlaceholder": "Scientific or common name",
+    "resultCount_one": "Showing {{shown}} of {{total}} species",
+    "resultCount_other": "Showing {{shown}} of {{total}} species",
+    "noResults": "No species match that search.",
+    "regionalNameVia": "Regional name via <name>{{source}}</name>.",
+    "transliterated": "No local name is recorded for this species — its English name is written here as it sounds.",
+    "noCommonName": "No common name recorded for this species — showing its scientific name.",
+    "rank": {
+      "kingdom": "Kingdom",
+      "phylum": "Phylum",
+      "class": "Class",
+      "order": "Order",
+      "family": "Family",
+      "genus": "Genus"
+    },
+    "photos": {
+      "recentTitle": "Recent sightings, photographed",
+      "title": "Sightings, photographed",
+      "recentNote_one": "Photographed within the last {{count}} day. Refreshes automatically as new sightings are uploaded.",
+      "recentNote_other": "Photographed within the last {{count}} days. Refreshes automatically as new sightings are uploaded.",
+      "olderNote_one": "Nothing photographed in the last {{count}} day — showing the newest available regardless of age (see the date on each photo below).",
+      "olderNote_other": "Nothing photographed in the last {{count}} days — showing the newest available regardless of age (see the date on each photo below).",
+      "unknownPhotographer": "Unknown",
+      "seeSource": "see source",
+      "source": "GBIF occurrence media (live). Photos are CC-licensed; attribution shown per image.",
+      "unavailable": "Photos are temporarily unavailable — GBIF (the photo source) didn't respond. This isn't a data gap; try reselecting the species in a moment.",
+      "noneRecent_one": "No recent photos of this species found (last {{count}} day) — this section will update automatically if a new sighting is photographed.",
+      "noneRecent_other": "No recent photos of this species found (last {{count}} days) — this section will update automatically if a new sighting is photographed.",
+      "none": "No photographed occurrence of this species in India is available from GBIF."
+    },
+    "context": {
+      "title": "Why it is found here",
+      "noLlm": "An AI explanation of these figures needs an LLM to be configured on the server.",
+      "relocationLabel": "Future relocation:",
+      "relocationNote": "Not provided. Two years of opportunistic sighting records cannot distinguish a real range shift from changes in where people looked; a prediction from them would reflect observer effort, not the fish. This needs tagging data or a species distribution model."
+    },
+    "foundIn": "Found in: {{regions}} (shaded above — a simplified state outline, not a surveyed boundary).",
+    "notInState": "No sightings fall within a coastal state boundary we have on file (open water, or outside the 9 states covered)."
+  },
+  "fisheries": {
+    "filters": {
+      "source": "Data source",
+      "groupBy": "Break down by",
+      "region": "Region",
+      "allRegions": "All regions",
+      "species": "Species",
+      "allSpecies": "All species",
+      "clear": "Clear filters"
+    },
+    "sourceOption": {
+      "FAO": "FAO reported landings (1950–2024)",
+      "SAU": "Sea Around Us reconstruction (1950–2019)"
+    },
+    "groupBy": {
+      "none": "Total only",
+      "species": "Species",
+      "region_FAO": "Region (FAO fishing area)",
+      "region_SAU": "Region (EEZ)"
+    },
+    "noRecords": "No catch records match those filters.",
+    "chart": {
+      "total": "Total catch",
+      "other_one": "Other ({{count}} more)",
+      "other_other": "Other ({{count}} more)",
+      "year": "Year {{year}}"
+    },
+    "citation": {
+      "FAO": "FAO Global Capture Production, March 2026 release (CC BY 4.0)",
+      "SAU": "Sea Around Us reconstruction (CC BY-NC-SA 4.0)"
+    },
+    "summary": {
+      "title": "What this chart shows",
+      "total_one": "Total catch across {{count}} year ({{first}}–{{last}}): <b>{{total}} tonnes</b>.",
+      "total_other": "Total catch across all {{count}} years ({{first}}–{{last}}): <b>{{total}} tonnes</b>.",
+      "firstLast": "Catch in {{first}}: <b>{{firstTotal}} t</b>. Catch in {{last}}: <b>{{lastTotal}} t</b> —",
+      "ratioHigher": "about <b>{{ratio}}×</b> higher over that period.",
+      "ratioLower": "about <b>{{ratio}}×</b> lower over that period.",
+      "noStart": "no catch recorded at the very start of the series to compare against.",
+      "peak": "Busiest year: <b>{{year}}</b>, with <b>{{value}} t</b> caught — the tallest point on the chart.",
+      "topSpecies": "Top species by total catch over the whole period:",
+      "topRegion": "Top region by total catch over the whole period:",
+      "stacked": "The chart is <b>stacked</b>, so the height at any point on the x-axis is the total catch that year — not a comparison of overlapping lines."
+    },
+    "forecast": {
+      "title": "Catch forecast for {{year}}",
+      "pickSpecies": "Pick a species above to forecast its catch for next year.",
+      "thisSpecies": "this species",
+      "notEnoughHistory": "Not enough history for <name>{{name}}</name> — the model needs at least 6 consecutive annual observations.",
+      "result": "Forecast catch for <b>{{year}}</b>: <b>{{value}} t</b> (last real record: {{last}} t in {{lastYear}}).",
+      "resultIn": "Forecast catch for <b>{{year}}</b> in {{region}}: <b>{{value}} t</b> (last real record: {{last}} t in {{lastYear}}).",
+      "up": "Up about <b>{{pct}}%</b>.",
+      "down": "Down about <b>{{pct}}%</b>.",
+      "projected_one": "The catch records end in {{lastYear}}, so this forecast is projected {{count}} year forward. Treat it as a rough trend, not a precise figure.",
+      "projected_other": "The catch records end in {{lastYear}}, so this forecast is projected {{count}} years forward, each year built on the previous year's forecast. Treat it as a rough trend, not a precise figure — uncertainty grows with every year past {{lastYear}}.",
+      "weakSkill": "barely better than assuming no change; read this prediction loosely.",
+      "driverUp": "{{feature}} pushed the forecast up (contribution {{contribution}}).",
+      "driverDown": "{{feature}} pushed the forecast down (contribution {{contribution}})."
+    },
+    "feature": {
+      "lag_1": "Last year's catch",
+      "lag_2": "Catch two years earlier",
+      "lag_3": "Catch three years earlier",
+      "roll_mean_3": "Three-year average catch",
+      "trend_3": "Two-year change in catch",
+      "year_index": "Year"
+    },
+    "about": {
+      "title": "About this breakdown",
+      "region_FAO": "Region here means <b>FAO major fishing area</b>, not Indian state — Area 51 is the Arabian Sea (west) coast, Area 57 the Bay of Bengal (east) coast and Andaman & Nicobar. FAO does not report a state-level split (Kerala / Goa / Odisha).",
+      "region_SAU": "Region here means <b>EEZ</b>, not Indian state — Sea Around Us reports catch by exclusive economic zone, so a state-level split (Kerala / Goa / Odisha) is not derivable from this source.",
+      "grouping": "Grouping by species charts the eight largest by total catch; the remainder are summed into \"Other\" so the yearly totals still add up.",
+      "measure_FAO": "These are <b>officially reported landings</b> (FAO Global Capture Production, CC BY 4.0). They exclude discards and unreported catch, so they run well below the Sea Around Us reconstruction — the two are different measurements and must not be compared year-for-year or summed. Some species only appear once India began reporting them separately (e.g. black pomfret from 2019).",
+      "measure_SAU": "These are <b>reconstructed</b> figures including estimated discards and unreported catch. They are not comparable with the FAO reported-landings series and must not be summed with it."
+    }
+  },
+  "molecular": {
+    "subtitleSuffix": "This is the reference library you match unknown sequences against.",
+    "about": {
+      "title": "What is this section, and is it eDNA?",
+      "barcode": "<b>A DNA barcode</b> is a short, standardised stretch of an organism's DNA that acts like a fingerprint for its species. Most records here use <b>COI-5P</b>, the standard marker for animals; the rest use 16S, rbcL and a few others.",
+      "notEdna": "<b>Strictly, this is not eDNA.</b> Environmental DNA means genetic traces recovered from a water sample, letting you detect species without catching them. These records come from physical specimens that were collected and sequenced. They are the <em>reference library</em> an eDNA study would compare its water samples against — necessary for eDNA work, but not eDNA results themselves. Actual water-sample detections would need a separate data source and are not in this platform.",
+      "columns": "<b>What each column means.</b> <em>Process ID</em> is BOLD's identifier for the record. <em>Identification</em> is the species the specimen was assigned to. <em>Marker</em> is which gene region was sequenced. <em>BIN</em> is BOLD's own cluster of near-identical barcodes, roughly a species-level grouping — useful when two records agree genetically but were named differently.",
+      "whatYouCanDo": "<b>What you can do here.</b> Paste a sequence into the search above and it will be ranked against all {{total}} records by composition similarity, returning the most likely species matches."
+    },
+    "search": {
+      "title": "Barcode similarity search",
+      "noSequence": "Don't have a sequence?",
+      "pickExample": "Pick a real example…",
+      "surprise": "Surprise me",
+      "placeholder": "Paste a nucleotide sequence (FASTA headers, gaps and ambiguity codes are stripped automatically)…",
+      "search": "Search",
+      "searching": "Searching…"
+    },
+    "result": {
+      "meta": "Compared against {{compared}} records · {{method}} · query {{bases}} bases",
+      "method": "5-mer frequency cosine similarity",
+      "caveat": "Composition-based ranking, not sequence alignment. It cannot detect insertions/deletions or report an E-value, and two sequences sharing composition in a different order will score as near-identical. Use BLAST or the BOLD ID Engine for an authoritative identification."
+    },
+    "columns": {
+      "similarity": "Similarity",
+      "processId": "Process ID",
+      "species": "Species",
+      "marker": "Marker",
+      "length": "Length",
+      "identification": "Identification",
+      "country": "Country",
+      "source": "Source"
+    },
+    "plain": {
+      "title": "In plain words, what this result means",
+      "unidentified": "an unidentified record",
+      "closest": "The closest match found is <name/>, at <b>{{pct}}% similarity</b>.",
+      "bandStrong": "That is a very close match — this sample most likely belongs to that species.",
+      "bandFair": "That is a fairly close match — probably that species or a close relative, but not certain enough to say for sure.",
+      "bandWeak": "That isn't a strong match to anything in the library — treat this result as inconclusive.",
+      "similarityMeans": "\"Similarity\" here means how alike the short repeating DNA patterns are between your sequence and each library record — like comparing two pieces of text for how many 5-letter chunks they share, not reading and matching every single letter in order.",
+      "checkedAgainst": "Your sequence was checked against <b>{{count}}</b> real DNA records in the library, and the table above shows the closest ones found, best match first.",
+      "estimate": "This is a quick estimate, not a lab-certified identification — it can be fooled by sequences that share a similar pattern but aren't actually related. For a confirmed identification, the result would need checking with proper alignment tools (like BLAST).",
+      "noMatch": "No record in the library shared any DNA pattern with this sequence — it may belong to a species that simply isn't in this reference library yet."
+    },
+    "useSequence": "Use this sequence"
+  },
+  "correlation": {
+    "subtitleSuffix": "Satellite and weather series resampled to monthly values and joined on month.",
+    "variableX": "Variable X",
+    "variableY": "Variable Y",
+    "variable": {
+      "sst": "Sea surface temperature",
+      "chlorophyll_a": "Chlorophyll-a",
+      "air_temp_max": "Max air temperature",
+      "precipitation": "Daily precipitation"
+    },
+    "pickDifferent": "Pick two different variables.",
+    "computing": "Computing…",
+    "stats": {
+      "pearson": "Pearson r",
+      "spearman": "Spearman ρ",
+      "pValue": "p-value",
+      "months": "Months",
+      "significant": "Significant (p<0.05)"
+    },
+    "plain": {
+      "title": "What this means in plain words",
+      "positive": "<b>{{x}}</b> and <b>{{y}}</b> tend to rise together — as {{x}} goes up, {{y}} tends to go up too.",
+      "negative": "<b>{{x}}</b> and <b>{{y}}</b> move in opposite directions — as {{x}} goes up, {{y}} tends to go down.",
+      "strength": "That's <b>{{strength}}</b> (correlation of {{r}}, where 0 means no relationship at all and ±1 would mean they move perfectly together).",
+      "significant_one": "This pattern is <b>statistically significant</b> (p = {{p}}) — unlikely to just be random noise, given {{count}} month of data.",
+      "significant_other": "This pattern is <b>statistically significant</b> (p = {{p}}) — unlikely to just be random noise, given {{count}} months of data.",
+      "notSignificant_one": "This pattern is <b>not statistically significant</b> — with only {{count}} month of overlapping data, it could plausibly just be random noise rather than a real relationship.",
+      "notSignificant_other": "This pattern is <b>not statistically significant</b> — with only {{count}} months of overlapping data, it could plausibly just be random noise rather than a real relationship.",
+      "causation": "<b>Correlation isn't causation</b> — this says the two move together, not that one causes the other. Both could be driven by something else entirely (like the seasons)."
+    },
+    "strength": {
+      "veryStrong": "a very strong relationship",
+      "fairlyStrong": "a fairly strong relationship",
+      "moderate": "a moderate relationship",
+      "weak": "a weak relationship",
+      "none": "almost no relationship"
+    },
+    "notes": {
+      "region_ignored": "Region filters do not apply to satellite variables: grid cells sit in open ocean and carry no region, so those series remain national.",
+      "too_few_months_one": "Only {{count}} overlapping month — too few to correlate.",
+      "too_few_months_other": "Only {{count}} overlapping months — too few to correlate.",
+      "indicative_one": "Based on {{count}} monthly point; treat the coefficient as indicative, not conclusive.",
+      "indicative_other": "Based on {{count}} monthly points; treat the coefficient as indicative, not conclusive.",
+      "spatial_means": "Computed on spatial averages across stations — this describes national month-to-month co-movement, not a relationship at any single location.",
+      "chlorophyll_median": "Chlorophyll uses the monthly median, not the mean: its values are heavily skewed, and a mean would follow a few turbid coastal cells rather than the whole basin."
+    }
+  },
+  "alerts": {
+    "severity": {
+      "low": "low",
+      "medium": "medium",
+      "high": "high",
+      "critical": "critical",
+      "unknown": "unknown"
+    },
+    "variable": {
+      "sst": "Sea surface temperature",
+      "chlorophyll_a": "Chlorophyll-a"
+    },
+    "station": "station {{id}}",
+    "vsThreshold": "{{value}} vs threshold {{threshold}}",
+    "unavailable": "Anomaly detection is temporarily unavailable from the server.",
+    "none": "No anomalies detected.",
+    "decline": {
+      "title": "Declining species",
+      "description": "Species whose reported catch has been trending down over the last decade of record — a slow trend, not a point-in-time spike like the alerts above.",
+      "rate_one": "Down about {{pct}}% a year, over {{count}} year",
+      "rate_other": "Down about {{pct}}% a year, over {{count}} years",
+      "slope": "{{value}} t/yr",
+      "none": "No declining trend detected in the catch record."
+    }
+  },
+  "recommendation": {
+    "explain": "Explain this in plain language",
+    "asking": "Asking…",
+    "cached": "cached",
+    "unavailable": "AI explanation unavailable right now (LLM provider issue) — see Admin / Data Status.",
+    "title": "Recommendation",
+    "titleFor": "Recommendation — {{relatedTo}}"
+  },
+  "chat": {
+    "emptyHint": "Ask a data question — e.g. \"What's the average SST off the Kerala coast this month?\"",
+    "placeholder": "Ask about ocean, weather, species, fisheries, or molecular data…",
+    "send": "Send",
+    "sending": "Sending…",
+    "unexpectedShape": "The server returned an unexpected response shape.",
+    "notWired": "The NL chatbot isn't available on this server.",
+    "requestFailed": "Couldn't get a response: {{message}}",
+    "fallback": {
+      "malformed_tool_call": "I couldn't complete that lookup — the model produced a malformed tool call, which happens occasionally with the free-tier model.",
+      "rate_limit": "The AI provider's free-tier rate limit was hit.",
+      "pipeline_failed": "The agent pipeline failed on that question.",
+      "hint": "Try rephrasing, or ask about one thing at a time — for example \"what is the catch history for the Indian oil sardine?\" or \"list critical SST anomalies\". No figures are shown because no tool returned data; I won't guess at numbers."
+    }
+  },
+  "admin": {
+    "notAuthorized": "Not authorised to view dataset status.",
+    "columns": {
+      "source": "Source",
+      "type": "Type",
+      "lastSynced": "Last synced",
+      "records": "Records",
+      "license": "Licence",
+      "cleaningNotes": "Cleaning notes"
+    },
+    "noCleaningNotes": "No cleaning notes recorded for this dataset.",
+    "datasetType": {
+      "satellite": "Satellite",
+      "sensor": "Sensor",
+      "weather": "Weather",
+      "biodiversity": "Biodiversity",
+      "fisheries": "Fisheries",
+      "genomics": "Genomics",
+      "boundaries": "Boundaries",
+      "vernacular-names": "Regional names"
+    }
+  },
+  "settings": {
+    "title": "Settings / Profile",
+    "email": "Email",
+    "name": "Name",
+    "role": "Role",
+    "institution": "Institution",
+    "memberSince": "Member since"
+  },
+  "places": {
+    "India": "India",
+    "Gujarat": "Gujarat",
+    "Maharashtra": "Maharashtra",
+    "Goa": "Goa",
+    "Karnataka": "Karnataka",
+    "Kerala": "Kerala",
+    "Tamil Nadu": "Tamil Nadu",
+    "Andhra Pradesh": "Andhra Pradesh",
+    "Odisha": "Odisha",
+    "West Bengal": "West Bengal",
+    "Open Indian Ocean": "Open Indian Ocean",
+    "India (mainland) EEZ": "India (mainland) EEZ",
+    "Andaman & Nicobar Isl. (India) EEZ": "Andaman & Nicobar Isl. (India) EEZ",
+    "India - FAO Area 51 (Western Indian Ocean)": "India - FAO Area 51 (Western Indian Ocean)",
+    "India - FAO Area 57 (Eastern Indian Ocean)": "India - FAO Area 57 (Eastern Indian Ocean)",
+    "Chennai": "Chennai",
+    "Digha": "Digha",
+    "Kakinada": "Kakinada",
+    "Karwar": "Karwar",
+    "Kochi": "Kochi",
+    "Kozhikode": "Kozhikode",
+    "Mangaluru": "Mangaluru",
+    "Mumbai": "Mumbai",
+    "Nagapattinam": "Nagapattinam",
+    "Panaji": "Panaji",
+    "Paradip": "Paradip",
+    "Porbandar": "Porbandar",
+    "Puri": "Puri",
+    "Ratnagiri": "Ratnagiri",
+    "Sagar Island": "Sagar Island",
+    "Tuticorin": "Tuticorin",
+    "Veraval": "Veraval",
+    "Visakhapatnam": "Visakhapatnam"
+  },
+  "home": {
+    "nav": {
+      "home": "Home",
+      "explore": "Explore Oceans",
+      "fisheries": "Fisheries",
+      "biodiversity": "Biodiversity",
+      "about": "About",
+      "platform": "Ocean Intelligence Platform",
+      "homeLabel": "OASIS home",
+      "primary": "Primary",
+      "footer": "Footer",
+      "logIn": "Log in",
+      "signUp": "Sign up",
+      "skip": "Skip to content"
+    },
+    "hero": {
+      "eyebrow": "Discover • Understand • Protect",
+      "line1": "Explore the Ocean.",
+      "line2": "Understand",
+      "accent": "Our Future.",
+      "lead": "From shifting ocean temperatures to marine biodiversity and sustainable fisheries, OASIS transforms complex marine data into meaningful insights for a healthier blue planet.",
+      "explore": "Explore the Platform",
+      "mission": "Discover Our Mission",
+      "scroll": "Scroll to explore",
+      "statsLabel": "Platform statistics from the OASIS database",
+      "statsCaption": "Platform statistics · OASIS database",
+      "temp": "Ocean temperature",
+      "tempNote": "Average SST · {{n}} satellite readings",
+      "bio": "Marine biodiversity",
+      "bioNote": "Species catalogued",
+      "obs": "Ocean observations",
+      "obsNote": "Weather observations",
+      "fish": "Fisheries intelligence",
+      "fishValue": "Sustainable futures",
+      "fishNote": "India’s reported marine catch, FAO",
+      "fishNoteYear": "India’s reported marine catch, FAO · to {{year}}"
+    },
+    "mission": {
+      "eyebrow": "The OASIS mission",
+      "line1": "One Ocean.",
+      "accent": "Connected Intelligence.",
+      "body": "The ocean is a complex, interconnected system. OASIS brings marine observations, fisheries information, biodiversity records, and environmental signals together to help researchers and decision-makers see the bigger picture.",
+      "learn": "Learn About OASIS",
+      "imageAlt": "Underwater scene with floating data panels showing charts above a coral reef",
+      "connect": "How the signals connect",
+      "badge": "6 data domains · 1 platform",
+      "diagram": "Diagram: ocean conditions, marine ecosystems and human activity are linked to one another",
+      "ocean": "Ocean",
+      "oceanSub": "SST · chlorophyll · weather",
+      "eco": "Ecosystems",
+      "ecoSub": "species · eDNA",
+      "human": "Human activity",
+      "humanSub": "fisheries · catch"
+    },
+    "domains": {
+      "eyebrow": "Data domains",
+      "title": "Every Signal Tells a Story.",
+      "subtitle": "Explore the interconnected systems shaping our oceans.",
+      "ocean": {
+        "title": "Ocean & Satellite",
+        "desc": "Observe ocean conditions through satellite imagery, sea-surface temperatures, and marine station data.",
+        "moreSst": "Shown: the latest sea-surface temperature across {{n}} satellite grid cells.",
+        "moreStations": "{{n}} stations, buoys and satellite grid cells.",
+        "cta": "Explore Ocean Data",
+        "alt": "Aerial view of deep blue open ocean with white wake"
+      },
+      "weather": {
+        "title": "Weather & Climate",
+        "desc": "Understand marine weather, changing sea conditions, and environmental patterns.",
+        "more": "{{n}} daily observations from coastal stations.",
+        "cta": "Explore Weather",
+        "alt": "Sunlight streaming through the ocean surface seen from below"
+      },
+      "species": {
+        "title": "Marine Biodiversity",
+        "desc": "Explore species records and discover the rich biodiversity of marine ecosystems.",
+        "more": "{{n}} species catalogued from occurrence records.",
+        "cta": "Discover Species",
+        "alt": "Clownfish, yellow snappers and a blue tang among colourful soft corals"
+      },
+      "fisheries": {
+        "title": "Fisheries Intelligence",
+        "desc": "Investigate fisheries trends, annual catch patterns, and opportunities for sustainable resource management.",
+        "more": "FAO reported landings alongside the Sea Around Us catch reconstruction.",
+        "cta": "Explore Fisheries",
+        "alt": "Aerial view of a research vessel cutting through dark blue water"
+      },
+      "molecular": {
+        "title": "Molecular & eDNA",
+        "desc": "Explore molecular evidence and environmental DNA to understand marine life beyond what is visible.",
+        "more": "{{n}} DNA barcode records from BOLD Systems.",
+        "cta": "Explore eDNA"
+      },
+      "risk": {
+        "title": "Correlation & Risk",
+        "desc": "Identify environmental relationships, emerging anomalies, and potential risks to marine ecosystems.",
+        "more": "Anomalies are flagged against each station’s own seasonal baseline.",
+        "cta": "Discover Insights",
+        "alt": "Translucent data charts floating in deep blue water"
+      }
+    },
+    "fisheries": {
+      "eyebrow": "Responsible fisheries",
+      "line1": "Protect Marine Life.",
+      "line2": "Support Sustainable Fisheries.",
+      "body": "Connect fisheries observations with environmental data to better understand catch patterns, changing marine conditions, and the health of ocean ecosystems.",
+      "p1": "Fisheries monitoring",
+      "p1Text": "Species-level catch records alongside national landings.",
+      "p2": "Catch trend analysis",
+      "p2Text": "Long-run trends, declines and forecasts with stated skill.",
+      "p3": "Ecosystem sustainability",
+      "p3Text": "Catch read next to ocean conditions, not in isolation.",
+      "landings": "India · FAO landings {{year}}",
+      "recordLength": "Record length",
+      "years": "{{n}} years",
+      "chartTitle": "India's reported marine catch",
+      "chartSource": "FAO, via <name>Our World in Data</name> · tonnes per year",
+      "unavailable": "Catch data is unavailable right now.",
+      "tooltip": "Reported landings",
+      "cta": "Explore Fisheries Intelligence",
+      "vesselAlt": "Aerial view of a research vessel with sampling buoys on deck, leaving a white wake through deep blue water"
+    },
+    "preview": {
+      "eyebrow": "The platform",
+      "title": "From Ocean Data to",
+      "accent": "Ocean Intelligence.",
+      "subtitle": "Overview of every data domain",
+      "satellite": "Satellite grid",
+      "coastal": "Coastal",
+      "buoy": "Moored buoy",
+      "anomaly": "Recent high/critical anomaly",
+      "mapLabel": "Map of {{n}} ocean stations, with {{a}} recent anomalies marked",
+      "caption": "Connected marine observations. Clearer environmental insights.",
+      "cta": "Enter OASIS Dashboard"
+    },
+    "benefits": {
+      "title": "Built to Help Us See the Bigger Picture.",
+      "b1": "Connected Marine Data",
+      "b1Text": "Bring oceanographic and environmental observations together.",
+      "b2": "Biodiversity Insights",
+      "b2Text": "Make marine species records easier to explore.",
+      "b3": "Fisheries Intelligence",
+      "b3Text": "Understand fisheries information and catch patterns.",
+      "b4": "Environmental Awareness",
+      "b4Text": "Highlight anomalies and relationships that deserve further investigation."
+    },
+    "cta": {
+      "title": "The Future of Our Ocean Starts with",
+      "accent": "Understanding.",
+      "body": "Explore the data. Discover the connections. Help build a more informed future for our oceans.",
+      "start": "Get Started with OASIS",
+      "explore": "Explore the Platform"
+    },
+    "footer": {
+      "tagline": "Ocean Intelligence for a Blue Planet",
+      "explore": "Explore",
+      "built": "Built for ocean discovery, marine research, and sustainable fisheries."
+    }
+  },
+  "refresh": {
+    "title": "You refreshed the page.",
+    "question": "Stay here, or go back to the homepage?",
+    "stay": "Stay on this page",
+    "home": "Go to homepage",
+    "remember": "Remember my choice (change it later in Settings)",
+    "setting": "When I refresh a page",
+    "ask": "Ask me each time",
+    "stayChoice": "Stay on the page",
+    "homeChoice": "Go to the homepage"
   }
 }

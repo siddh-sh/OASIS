@@ -34,13 +34,13 @@ describe('ChatWindow', () => {
 
     await user.type(box, 'first{Enter}')
     await waitFor(() => expect(chat).toHaveBeenCalledTimes(1))
-    expect(chat).toHaveBeenLastCalledWith('first', undefined)
+    expect(chat).toHaveBeenLastCalledWith('first', undefined, 'en')
 
     await user.type(box, 'second{Enter}')
     await waitFor(() => expect(chat).toHaveBeenCalledTimes(2))
     // Without this the backend starts a new conversation every turn and
     // follow-up questions lose all context.
-    expect(chat).toHaveBeenLastCalledWith('second', 42)
+    expect(chat).toHaveBeenLastCalledWith('second', 42, 'en')
   })
 
   it('survives a malformed response instead of blanking the page', async () => {

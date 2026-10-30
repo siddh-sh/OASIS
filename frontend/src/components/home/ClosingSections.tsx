@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
 import { useAuth } from '@/hooks/useAuth'
 import { useReveal } from './hooks'
@@ -5,29 +6,30 @@ import { ArrowRight, Fish, Network, Radar, Waves } from './icons'
 import { OasisEmblem } from './HomeNav'
 
 const BENEFITS = [
-  { icon: Network, title: 'Connected Marine Data', text: 'Bring oceanographic and environmental observations together.' },
-  { icon: Waves, title: 'Biodiversity Insights', text: 'Make marine species records easier to explore.' },
-  { icon: Fish, title: 'Fisheries Intelligence', text: 'Understand fisheries information and catch patterns.' },
-  { icon: Radar, title: 'Environmental Awareness', text: 'Highlight anomalies and relationships that deserve further investigation.' },
-]
+  { icon: Network, key: 'b1' },
+  { icon: Waves, key: 'b2' },
+  { icon: Fish, key: 'b3' },
+  { icon: Radar, key: 'b4' },
+] as const
 
 export function BenefitsSection() {
+  const { t } = useTranslation()
   const ref = useReveal()
   return (
     <section id="benefits" className="relative scroll-mt-20 py-24 sm:py-28">
       <div ref={ref} className="reveal mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <h2 className="font-display max-w-2xl text-4xl leading-tight font-medium sm:text-5xl">
-          Built to Help Us See the Bigger Picture.
+          {t('home.benefits.title')}
         </h2>
         <div className="mt-6 h-px bg-[linear-gradient(90deg,var(--turquoise),rgba(19,199,222,0.2)_40%,transparent)]" />
         <ul className="mt-12 grid gap-10 sm:grid-cols-2 lg:grid-cols-4 lg:gap-8">
-          {BENEFITS.map(({ icon: Icon, title, text }) => (
-            <li key={title}>
+          {BENEFITS.map(({ icon: Icon, key }) => (
+            <li key={key}>
               <span className="flex h-11 w-11 items-center justify-center rounded-xl border border-[var(--glass-line)] bg-[rgba(19,199,222,0.08)] text-[var(--turquoise)]">
                 <Icon />
               </span>
-              <h3 className="mt-5 text-lg font-semibold">{title}</h3>
-              <p className="mt-2 text-[15px] leading-relaxed text-[var(--muted)]">{text}</p>
+              <h3 className="mt-5 text-lg font-semibold">{t(`home.benefits.${key}`)}</h3>
+              <p className="mt-2 text-[15px] leading-relaxed text-[var(--muted)]">{t(`home.benefits.${key}Text`)}</p>
             </li>
           ))}
         </ul>
@@ -37,6 +39,7 @@ export function BenefitsSection() {
 }
 
 export function FinalCta() {
+  const { t } = useTranslation()
   const ref = useReveal()
   const { isAuthenticated } = useAuth()
   return (
@@ -50,18 +53,18 @@ export function FinalCta() {
       <div ref={ref} className="reveal mx-auto flex max-w-3xl flex-col items-center px-4 text-center sm:px-6">
         <OasisEmblem size={52} />
         <h2 className="font-display mt-8 text-4xl leading-[1.08] font-medium sm:text-6xl">
-          The Future of Our Ocean Starts with <span className="text-gradient italic">Understanding.</span>
+          {t('home.cta.title')} <span className="text-gradient italic">{t('home.cta.accent')}</span>
         </h2>
         <p className="mt-6 max-w-xl text-base text-[var(--muted)] sm:text-lg">
-          Explore the data. Discover the connections. Help build a more informed future for our oceans.
+          {t('home.cta.body')}
         </p>
         <div className="mt-10 flex flex-wrap justify-center gap-3">
           <Link to={isAuthenticated ? '/dashboard' : '/login?mode=signup'} data-cursor="primary"
             className="btn-primary inline-flex items-center gap-2 rounded-full px-7 py-3.5 text-[15px]">
-            Get Started with OASIS <ArrowRight size={18} />
+            {t('home.cta.start')} <ArrowRight size={18} />
           </Link>
           <a href="#explore" className="btn-ghost inline-flex items-center rounded-full px-7 py-3.5 text-[15px]">
-            Explore the Platform
+            {t('home.cta.explore')}
           </a>
         </div>
       </div>
@@ -74,11 +77,12 @@ export function FinalCta() {
 }
 
 export function HomeFooter() {
+  const { t } = useTranslation()
   const links = [
-    { href: '#top', label: 'Home' },
-    { href: '#explore', label: 'Explore' },
-    { href: '#fisheries', label: 'Fisheries' },
-    { href: '#mission', label: 'About' },
+    { href: '#top', label: t('home.nav.home') },
+    { href: '#explore', label: t('home.footer.explore') },
+    { href: '#fisheries', label: t('home.nav.fisheries') },
+    { href: '#mission', label: t('home.nav.about') },
   ]
   return (
     <footer className="border-t border-[var(--glass-line)] bg-[#031B2A]">
@@ -88,18 +92,18 @@ export function HomeFooter() {
             <OasisEmblem />
             <span className="text-lg font-semibold tracking-[0.18em]">OASIS</span>
           </div>
-          <p className="mt-3 text-sm text-[var(--muted)]">Ocean Intelligence for a Blue Planet</p>
+          <p className="mt-3 text-sm text-[var(--muted)]">{t('home.footer.tagline')}</p>
         </div>
-        <nav aria-label="Footer" className="flex flex-wrap gap-x-8 gap-y-3 text-sm">
+        <nav aria-label={t('home.nav.footer')} className="flex flex-wrap gap-x-8 gap-y-3 text-sm">
           {links.map((l) => (
             <a key={l.href} href={l.href} className="text-[var(--muted)] hover:text-[var(--white)]">{l.label}</a>
           ))}
-          <Link to="/login" className="text-[var(--muted)] hover:text-[var(--white)]">Log in</Link>
-          <Link to="/login?mode=signup" className="text-[var(--turquoise)] hover:text-[var(--white)]">Sign up</Link>
+          <Link to="/login" className="text-[var(--muted)] hover:text-[var(--white)]">{t('home.nav.logIn')}</Link>
+          <Link to="/login?mode=signup" className="text-[var(--turquoise)] hover:text-[var(--white)]">{t('home.nav.signUp')}</Link>
         </nav>
       </div>
       <div className="mx-auto flex max-w-7xl flex-col gap-2 border-t border-white/5 px-4 py-6 text-[13px] text-[var(--muted)] sm:flex-row sm:justify-between sm:px-6 lg:px-8">
-        <p>Built for ocean discovery, marine research, and sustainable fisheries.</p>
+        <p>{t('home.footer.built')}</p>
         <p>© {new Date().getFullYear()} OASIS</p>
       </div>
     </footer>

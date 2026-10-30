@@ -1,14 +1,9 @@
+import { ApiError } from '@/api/apiError'
 import { useAuthStore } from '@/store/auth'
 
-const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000'
+export { ApiError }
 
-export class ApiError extends Error {
-  status: number
-  constructor(status: number, message: string) {
-    super(message)
-    this.status = status
-  }
-}
+const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000'
 
 /** Builds `?key=value` query strings, dropping null/undefined/empty values. */
 export function toQuery(params: Record<string, string | number | boolean | undefined | null>): string {

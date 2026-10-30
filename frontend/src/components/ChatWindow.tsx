@@ -1,9 +1,12 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { agentApi, type ChatMessage } from '@/api/agent'
 import { ApiError } from '@/api/client'
 import { MessageBubble } from '@/components/MessageBubble'
+import { describeError } from '@/i18n/errors'
 
 export function ChatWindow() {
+  const { t, i18n } = useTranslation()
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
@@ -16,7 +19,7 @@ export function ChatWindow() {
     setMessages((prev) => [...prev, { role: 'user', content: text }])
     setSending(true)
     try {
-      const res = await agentApi.chat(text, conversationId)
+      const res = await agentApi.chat(text, conversationId, i18n.language)
       setConversationId(res.conversation_id)
       // Guard the shape rather than trusting it: pushing an undefined message
       // renders a MessageBubble with no `role`, which throws during render and
@@ -24,13 +27,13 @@ export function ChatWindow() {
       const reply: ChatMessage =
         res.message && typeof res.message.content === 'string'
           ? res.message
-          : { role: 'assistant', content: 'The server returned an unexpected response shape.' }
+          : { role: 'assistant', content: t('chat.unexpectedShape') }
       setMessages((prev) => [...prev, reply])
     } catch (e) {
       const fallback =
         e instanceof ApiError && e.status === 501
-          ? "The NL chatbot isn't wired up yet — it lands in Phase 5 (LangGraph pipeline + pgvector RAG)."
-          : `Couldn't get a response: ${(e as Error).message}`
+          ? t('chat.notWired')
+          : t('chat.requestFailed', { message: describeError(e) })
       setMessages((prev) => [...prev, { role: 'assistant', content: fallback }])
     } finally {
       setSending(false)
@@ -39,12 +42,8 @@ export function ChatWindow() {
 
   return (
     <div className="flex h-full flex-col rounded-lg border border-ocean-200 dark:border-ocean-800">
-      <div className="flex-1 space-y-3 overflow-y-auto p-4">
-        {messages.length === 0 && (
-          <p className="text-sm text-ocean-500">
-            Ask a data question — e.g. "What's the average SST off the Kerala coast this month?"
-          </p>
-        )}
+      <div className="oasis-scroll flex-1 space-y-3 overflow-y-auto p-4" data-lenis-prevent>
+        {messages.length === 0 && <p className="text-sm text-ocean-500">{t('chat.emptyHint')}</p>}
         {messages.map((m, i) => (
           <MessageBubble key={i} message={m} />
         ))}
@@ -54,7 +53,7 @@ export function ChatWindow() {
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && void send()}
-          placeholder="Ask about ocean, weather, species, fisheries, or molecular data…"
+          placeholder={t('chat.placeholder')}
           className="flex-1 rounded-md border border-ocean-300 px-3 py-2 text-sm dark:border-ocean-700 dark:bg-ocean-900"
         />
         <button
@@ -62,7 +61,7 @@ export function ChatWindow() {
           disabled={sending}
           className="rounded-md bg-ocean-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
         >
-          Send
+          {sending ? t('chat.sending') : t('chat.send')}
         </button>
       </div>
     </div>

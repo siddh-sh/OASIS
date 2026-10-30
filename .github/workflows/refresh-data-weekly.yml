@@ -29,6 +29,10 @@ jobs:
     # secret is added, which skips those steps.
     env:
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      # Optional: only the species-name transliteration step uses these.
+      LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
+      LLM_BASE_URL: ${{ secrets.LLM_BASE_URL }}
+      LLM_MODEL: ${{ secrets.LLM_MODEL }}
     timeout-minutes: 60
 
     steps:
@@ -102,6 +106,15 @@ jobs:
         if: env.DATABASE_URL != ''
         continue-on-error: true
         run: python -u data-pipeline/cleaning/backfill_taxonomy.py
+
+      # New species' English common names written phonetically in each UI
+      # language (cached in seeds/raw/vernacular/transliterations.csv, so
+      # only new names reach the LLM). Skipped without the LLM_* secrets.
+      - name: Transliterate new species names
+        if: env.DATABASE_URL != '' && env.LLM_API_KEY != ''
+        continue-on-error: true
+        timeout-minutes: 15
+        run: python -u data-pipeline/cleaning/transliterate_common_names.py
 
       # New species from OBIS/GBIF/FAO are invisible to the chatbot's species
       # search until they are embedded.

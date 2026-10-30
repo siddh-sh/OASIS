@@ -125,6 +125,7 @@ than mock — when no database is configured.
 ## Docs
 
 - [`docs/architecture.md`](docs/architecture.md) — agent workflow, built vs. planned
+- [`docs/i18n.md`](docs/i18n.md) — English/Marathi localisation: architecture, adding text, tests
 - [`docs/api-reference.md`](docs/api-reference.md) — every live endpoint
 - [`docs/database-schema.md`](docs/database-schema.md) — human-readable schema + reconciliation notes
 - [`docs/model-cards.md`](docs/model-cards.md) — Phase 4 models, metrics, and where they fall short

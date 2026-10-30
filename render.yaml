@@ -42,6 +42,11 @@ services:
         value: https://api.groq.com/openai/v1
       - key: LLM_MODEL
         value: openai/gpt-oss-120b
+      # Answers when the main model's quota is used up.
+      - key: LLM_FALLBACK_MODEL
+        value: openai/gpt-oss-20b
+      - key: LLM_REASONING_EFFORT
+        value: low
       # Set to the Vercel URL once the frontend is deployed, or CORS will
       # reject every browser request.
       - key: CORS_ORIGINS

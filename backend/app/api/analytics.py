@@ -16,7 +16,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.agents.explainable_recommendation_agent import recommend
-from app.agents.llm import LLMNotConfigured, llm_available
+from app.agents.llm import LANGUAGE_PATTERN, LLMNotConfigured, llm_available
+from app.api.species import vernacular_names
 from app.db.models import AnomalyEvent, Region, Species
 from app.db.session import get_db
 from app.ml import registry
@@ -193,6 +194,7 @@ def list_anomalies(
 @router.get("/anomalies/catch-decline", response_model=list[CatchDeclineOut])
 def catch_decline(
     limit: int = Query(default=20, ge=1, le=200),
+    language: str | None = Query(default=None, description="attach each species' name in this language"),
     db: Session = Depends(get_db),
 ):
     """Species whose catch is trending down over the last decade of record.
@@ -222,11 +224,16 @@ def catch_decline(
         ).all()
     )
 
+    regional = (
+        vernacular_names(db, [int(s) for s in declining["species_id"]], language) if language else {}
+    )
+
     return [
         CatchDeclineOut(
             species_id=int(r.species_id),
             scientific_name=names.get(int(r.species_id)),
             common_name=commons.get(int(r.species_id)),
+            vernacular_name=regional.get(int(r.species_id)),
             slope_tonnes_per_year=float(r.slope_tonnes_per_year),
             pct_per_year=float(r.pct_per_year),
             n_years=int(r.n_years),
@@ -253,6 +260,7 @@ def explain_prediction(prediction_id: int, db: Session = Depends(get_db)):
 def recommendation(
     prediction_or_anomaly_id: int,
     refresh: bool = Query(default=False, description="regenerate instead of returning the stored narrative"),
+    language: str = Query(default="en", pattern=LANGUAGE_PATTERN, description="language to write the narrative in"),
     db: Session = Depends(get_db),
 ):
     """Plain-language recommendation for a prediction or an anomaly.
@@ -269,7 +277,7 @@ def recommendation(
             "provider works (console.groq.com is free).",
         )
     try:
-        payload = recommend(db, prediction_or_anomaly_id, refresh=refresh)
+        payload = recommend(db, prediction_or_anomaly_id, refresh=refresh, language=language)
     except LLMNotConfigured as exc:
         raise HTTPException(503, str(exc)) from exc
     except Exception as exc:  # noqa: BLE001

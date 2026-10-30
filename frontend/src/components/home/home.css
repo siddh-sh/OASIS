@@ -283,3 +283,8 @@
     transform: none;
   }
 }
+
+/* Indic scripts: no tracking (see index.css). */
+html:not(:lang(en)) .oasis-home .eyebrow {
+  letter-spacing: normal;
+}

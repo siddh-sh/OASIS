@@ -20,6 +20,10 @@ export type CatchSource = 'FAO' | 'SAU'
 export interface CatchSeries {
   key: string
   label: string
+  /** Only on the "other" series: how many series it folds together. */
+  count?: number
+  /** Sourced name in the requested language, when one exists. */
+  vernacular_name?: string
   points: { year: number; tonnes: number }[]
 }
 
@@ -41,12 +45,15 @@ export interface CatchFilters {
     species_id: number
     scientific_name: string
     common_name: string | null
+    /** Sourced name in the requested language, when one exists. */
+    vernacular_name: string | null
     total_tonnes: number
   }[]
 }
 
 export const fisheriesBreakdownApi = {
-  filters: (source: CatchSource) => apiFetch<CatchFilters>(`/api/fisheries/filters${toQuery({ source })}`),
+  filters: (source: CatchSource, language?: string) =>
+    apiFetch<CatchFilters>(`/api/fisheries/filters${toQuery({ source, language })}`),
   timeseries: (
     params: {
       group_by?: 'none' | 'species' | 'region'
@@ -54,6 +61,7 @@ export const fisheriesBreakdownApi = {
       species_id?: number
       top_n?: number
       source?: CatchSource
+      language?: string
     } = {},
   ) => apiFetch<CatchTimeseries>(`/api/fisheries/timeseries${toQuery(params)}`),
 }

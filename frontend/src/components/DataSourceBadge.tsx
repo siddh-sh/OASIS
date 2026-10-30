@@ -1,4 +1,5 @@
 import clsx from 'clsx'
+import { useTranslation } from 'react-i18next'
 
 // Every data point in OASIS traces to a named real source — this badge is
 // what makes that provenance visible in the UI rather than implicit.
@@ -16,6 +17,7 @@ const SOURCE_COLORS: Record<string, string> = {
 }
 
 export function DataSourceBadge({ source }: { source: string }) {
+  const { t } = useTranslation()
   const colorClass = SOURCE_COLORS[source] ?? 'bg-ocean-200/60 text-ocean-700 dark:bg-ocean-800 dark:text-ocean-200'
   return (
     <span
@@ -23,7 +25,9 @@ export function DataSourceBadge({ source }: { source: string }) {
         'inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium whitespace-nowrap',
         colorClass,
       )}
-      title={`Source: ${source}`}
+      title={t('common.sourceTooltip', { source })}
+      // Organisation/dataset names (NOAA, FAO, OBIS…) are proper nouns.
+      translate="no"
     >
       {source}
     </span>

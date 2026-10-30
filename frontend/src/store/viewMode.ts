@@ -16,28 +16,9 @@ import { persist } from 'zustand/middleware'
  */
 export type ViewMode = 'researcher' | 'fisherman' | 'student' | 'policy'
 
-export const VIEW_MODES: { value: ViewMode; label: string; blurb: string }[] = [
-  {
-    value: 'researcher',
-    label: 'Researcher',
-    blurb: 'Scientific names first, full taxonomy, raw figures and model diagnostics.',
-  },
-  {
-    value: 'fisherman',
-    label: 'Fisherman',
-    blurb: 'Common names first, plain language, practical figures. Jargon hidden.',
-  },
-  {
-    value: 'student',
-    label: 'Student',
-    blurb: 'Both names, with explanatory context on what each measure means.',
-  },
-  {
-    value: 'policy',
-    label: 'Policy maker',
-    blurb: 'Common names, trends and totals emphasised over per-record detail.',
-  },
-]
+// Display names and descriptions live in the dictionaries under
+// `viewMode.<value>`; this list is only the stable internal values.
+export const VIEW_MODES: ViewMode[] = ['researcher', 'fisherman', 'student', 'policy']
 
 interface ViewModeState {
   mode: ViewMode
@@ -82,8 +63,10 @@ export function speciesLabel(
   commonName: string | null | undefined,
   vernacularName?: string | null,
 ): { primary: string; secondary: string | null; primaryIsScientific: boolean } {
+  // With a name in the reader's language, the scientific name is the
+  // useful second line (the English common name would be a third script).
   if (prefersCommonName(mode) && vernacularName) {
-    return { primary: vernacularName, secondary: commonName ?? scientificName, primaryIsScientific: false }
+    return { primary: vernacularName, secondary: scientificName, primaryIsScientific: false }
   }
   if (prefersCommonName(mode) && commonName) {
     return { primary: commonName, secondary: scientificName, primaryIsScientific: false }
@@ -91,5 +74,5 @@ export function speciesLabel(
   if (prefersCommonName(mode)) {
     return { primary: scientificName, secondary: null, primaryIsScientific: true }
   }
-  return { primary: scientificName, secondary: commonName ?? null, primaryIsScientific: true }
+  return { primary: scientificName, secondary: vernacularName ?? commonName ?? null, primaryIsScientific: true }
 }

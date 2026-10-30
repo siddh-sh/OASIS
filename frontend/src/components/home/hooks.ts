@@ -6,6 +6,8 @@ import { useMolecularRecords } from '@/hooks/useMolecularData'
 import { useOceanReadingsSummary, useOceanStations } from '@/hooks/useOceanData'
 import { useSpeciesList } from '@/hooks/useSpeciesData'
 import { useWeatherObservations } from '@/hooks/useWeatherData'
+import i18n from '@/i18n'
+import { makeFormatters } from '@/i18n/format'
 
 /**
  * Adds `is-visible` once the element scrolls into view, then stops
@@ -100,6 +102,7 @@ export function useSatelliteSst(enabled: boolean) {
   })
 }
 
+/** A count in the active language's number format (Latin digits, local grouping). */
 export function formatCount(n: number | undefined): string {
-  return n === undefined ? '—' : n.toLocaleString()
+  return n === undefined ? '—' : makeFormatters(i18n.language).int(n)
 }

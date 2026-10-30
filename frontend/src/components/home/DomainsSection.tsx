@@ -1,5 +1,6 @@
 import clsx from 'clsx'
 import { memo, type ReactNode } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
 import oceanPanels from '@/assets/home/ocean-data-panels.webp'
 import openWater from '@/assets/home/open-water.webp'
@@ -122,26 +123,30 @@ const img = (src: string, alt: string, position = 'center') => (
 )
 
 export function DomainsSection() {
+  const { t } = useTranslation()
   const heading = useReveal()
   const { ref: gridRef, near } = useNearViewport()
   const sst = useSatelliteSst(near)
   const stats = usePlatformStats()
 
+  const d = (key: 'ocean' | 'weather' | 'species' | 'fisheries' | 'molecular' | 'risk') => ({
+    label: t(`home.domains.${key}.title`),
+    title: t(`home.domains.${key}.title`),
+    description: t(`home.domains.${key}.desc`),
+    cta: t(`home.domains.${key}.cta`),
+  })
   const domains: Domain[] = [
     {
-      label: 'Ocean & Satellite',
-      title: 'Ocean & Satellite',
-      description: 'Observe ocean conditions through satellite imagery, sea-surface temperatures, and marine station data.',
+      ...d('ocean'),
       more: sst.data
-        ? `Shown: the latest sea-surface temperature across ${sst.data.length.toLocaleString()} satellite grid cells.`
-        : `${formatCount(stats.stationCount)} stations, buoys and satellite grid cells.`,
-      cta: 'Explore Ocean Data',
+        ? t('home.domains.ocean.moreSst', { n: formatCount(sst.data.length) })
+        : t('home.domains.ocean.moreStations', { n: formatCount(stats.stationCount) }),
       to: '/ocean',
       tall: true,
       className: 'min-h-[420px] sm:col-span-2 lg:col-span-7 lg:row-span-2 lg:min-h-[600px]',
       media: (
         <div className="relative h-full w-full">
-          {img(openWater, 'Aerial view of deep blue open ocean with white wake', 'right top')}
+          {img(openWater, t('home.domains.ocean.alt'), 'right top')}
           <div className="absolute inset-0 bg-[rgba(3,27,42,0.45)]" />
           <div className="absolute inset-x-[8%] top-[6%] bottom-[38%] opacity-90">
             {sst.data && <SstField cells={sst.data} />}
@@ -150,55 +155,40 @@ export function DomainsSection() {
       ),
     },
     {
-      label: 'Weather & Climate',
-      title: 'Weather & Climate',
-      description: 'Understand marine weather, changing sea conditions, and environmental patterns.',
-      more: `${formatCount(stats.weatherCount)} daily observations from coastal stations.`,
-      cta: 'Explore Weather',
+      ...d('weather'),
+      more: t('home.domains.weather.more', { n: formatCount(stats.weatherCount) }),
       to: '/weather',
       className: 'min-h-[300px] lg:col-span-5',
-      media: img(reefSurface, 'Sunlight streaming through the ocean surface seen from below', 'center 30%'),
+      media: img(reefSurface, t('home.domains.weather.alt'), 'center 30%'),
     },
     {
       id: 'biodiversity',
-      label: 'Marine Biodiversity',
-      title: 'Marine Biodiversity',
-      description: 'Explore species records and discover the rich biodiversity of marine ecosystems.',
-      more: `${formatCount(stats.speciesCount)} species catalogued from occurrence records.`,
-      cta: 'Discover Species',
+      ...d('species'),
+      more: t('home.domains.species.more', { n: formatCount(stats.speciesCount) }),
       to: '/species',
       className: 'min-h-[300px] lg:col-span-5',
-      media: img(reefLife, 'Clownfish, yellow snappers and a blue tang among colourful soft corals'),
+      media: img(reefLife, t('home.domains.species.alt')),
     },
     {
-      label: 'Fisheries Intelligence',
-      title: 'Fisheries Intelligence',
-      description: 'Investigate fisheries trends, annual catch patterns, and opportunities for sustainable resource management.',
-      more: 'FAO reported landings alongside the Sea Around Us catch reconstruction.',
-      cta: 'Explore Fisheries',
+      ...d('fisheries'),
+      more: t('home.domains.fisheries.more'),
       to: '/fisheries',
       className: 'min-h-[340px] lg:col-span-4',
-      media: img(vessel, 'Aerial view of a research vessel cutting through dark blue water', '40% center'),
+      media: img(vessel, t('home.domains.fisheries.alt'), '40% center'),
     },
     {
-      label: 'Molecular & eDNA',
-      title: 'Molecular & eDNA',
-      description: 'Explore molecular evidence and environmental DNA to understand marine life beyond what is visible.',
-      more: `${formatCount(stats.molecularCount)} DNA barcode records from BOLD Systems.`,
-      cta: 'Explore eDNA',
+      ...d('molecular'),
+      more: t('home.domains.molecular.more', { n: formatCount(stats.molecularCount) }),
       to: '/molecular',
       className: 'min-h-[340px] lg:col-span-4',
       media: <DnaHelix />,
     },
     {
-      label: 'Correlation & Risk',
-      title: 'Correlation & Risk',
-      description: 'Identify environmental relationships, emerging anomalies, and potential risks to marine ecosystems.',
-      more: 'Anomalies are flagged against each station’s own seasonal baseline.',
-      cta: 'Discover Insights',
+      ...d('risk'),
+      more: t('home.domains.risk.more'),
       to: '/correlation',
       className: 'min-h-[340px] lg:col-span-4',
-      media: img(oceanPanels, 'Translucent data charts floating in deep blue water'),
+      media: img(oceanPanels, t('home.domains.risk.alt')),
     },
   ]
 
@@ -207,9 +197,9 @@ export function DomainsSection() {
       <div className="pointer-events-none absolute inset-x-0 top-0 h-[600px] bg-[radial-gradient(60%_50%_at_50%_0%,rgba(19,199,222,0.1),transparent)]" aria-hidden />
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div ref={heading} className="reveal max-w-2xl">
-          <p className="eyebrow">Data domains</p>
-          <h2 className="font-display mt-4 text-4xl leading-tight font-medium sm:text-5xl">Every Signal Tells a Story.</h2>
-          <p className="mt-4 text-base text-[var(--muted)] sm:text-lg">Explore the interconnected systems shaping our oceans.</p>
+          <p className="eyebrow">{t('home.domains.eyebrow')}</p>
+          <h2 className="font-display mt-4 text-4xl leading-tight font-medium sm:text-5xl">{t('home.domains.title')}</h2>
+          <p className="mt-4 text-base text-[var(--muted)] sm:text-lg">{t('home.domains.subtitle')}</p>
         </div>
         <div ref={gridRef} className="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-12">
           {domains.map((d, i) => <DomainCard key={d.title} d={d} index={i} />)}

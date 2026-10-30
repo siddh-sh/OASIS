@@ -42,18 +42,29 @@ def _load_history(db: Session, conversation_id: int) -> list:
     return messages
 
 
-def graph_invoke(db: Session, messages: list) -> dict:
-    return build_graph(db).invoke({"messages": messages, "hops": 0})
+def graph_invoke(db: Session, messages: list, language: str = "en") -> dict:
+    return build_graph(db, language).invoke({"messages": messages, "hops": 0})
+
+
+def fallback_code(exc: Exception) -> str:
+    """Why the pipeline failed, as a stable code the UI can render in the
+    reader's language (the English sentence below is what gets stored)."""
+    detail = str(exc)
+    if "tool_use_failed" in detail or "Failed to call a function" in detail:
+        return "malformed_tool_call"
+    if "rate" in detail.lower() and "limit" in detail.lower():
+        return "rate_limit"
+    return "pipeline_failed"
 
 
 def _fallback_answer(message: str, exc: Exception) -> str:
-    detail = str(exc)
-    if "tool_use_failed" in detail or "Failed to call a function" in detail:
+    code = fallback_code(exc)
+    if code == "malformed_tool_call":
         reason = (
             "I couldn't complete that lookup — the model produced a malformed "
             "tool call, which happens occasionally with the free-tier model."
         )
-    elif "rate" in detail.lower() and "limit" in detail.lower():
+    elif code == "rate_limit":
         reason = "The LLM provider's free-tier rate limit was hit."
     elif "model_not_found" in detail:
         reason = (
@@ -75,6 +86,7 @@ def chat(
     message: str,
     conversation_id: int | None = None,
     user_id: str | None = None,
+    language: str = "en",
 ) -> dict:
     if conversation_id is None:
         conversation = AgentConversation(user_id=user_id)
@@ -89,10 +101,11 @@ def chat(
     turn = [*history, HumanMessage(content=message)]
 
     try:
-        result = graph_invoke(db, turn)
+        result = graph_invoke(db, turn, language)
         messages = result["messages"]
         answer = messages[-1].content if messages else ""
         tools = used_tools(messages)
+        failure = None
     except Exception as exc:  # noqa: BLE001
         # Smaller models occasionally emit malformed tool-call syntax, which
         # the provider rejects with a 400 before any tool runs. That must not
@@ -104,6 +117,7 @@ def chat(
         logger.exception("agent pipeline failed for conversation %s", conversation_id)
         answer = _fallback_answer(message, exc)
         tools = []
+        failure = fallback_code(exc)
 
     db.add(AgentMessage(conversation_id=conversation_id, role="user", content=message))
     db.add(
@@ -118,7 +132,12 @@ def chat(
     )
     db.commit()
 
-    return {"conversation_id": conversation_id, "answer": answer, "tools_used": tools}
+    return {
+        "conversation_id": conversation_id,
+        "answer": answer,
+        "tools_used": tools,
+        "fallback_code": failure,
+    }
 
 
 def get_conversation(db: Session, conversation_id: int) -> dict | None:

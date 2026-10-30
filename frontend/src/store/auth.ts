@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
+import { ApiError } from '@/api/apiError'
 import type { AuthTokenResponse, Profile } from '@/types/api'
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000'
@@ -9,7 +10,9 @@ interface AuthState {
   refreshToken: string | null
   profile: Profile | null
   status: 'idle' | 'loading' | 'authenticated' | 'unauthenticated'
-  error: string | null
+  /** Kept as the error itself (not its text) so the UI can explain it in
+   *  the reader's language from the status code. */
+  error: Error | null
   login: (email: string, password: string) => Promise<void>
   signup: (email: string, password: string, fullName?: string, institution?: string) => Promise<void>
   logout: () => Promise<void>
@@ -31,7 +34,7 @@ async function authPost<T>(path: string, body: unknown, token?: string): Promise
   const res = await fetch(`${BASE_URL}${path}`, { method: 'POST', headers, body: JSON.stringify(body) })
   if (!res.ok) {
     const data = await res.json().catch(() => ({}))
-    throw new Error(errorDetail(data.detail) ?? `${path} failed (${res.status})`)
+    throw new ApiError(res.status, errorDetail(data.detail) ?? `${path} failed (${res.status})`)
   }
   if (res.status === 204) return undefined as T
   return res.json() as Promise<T>
@@ -65,7 +68,7 @@ export const useAuthStore = create<AuthState>()(
           set({ accessToken: data.access_token, refreshToken: data.refresh_token, status: 'authenticated' })
           await get().fetchProfile()
         } catch (e) {
-          set({ status: 'unauthenticated', error: (e as Error).message })
+          set({ status: 'unauthenticated', error: e as Error })
           throw e
         }
       },
@@ -87,7 +90,7 @@ export const useAuthStore = create<AuthState>()(
           set({ accessToken: data.access_token, refreshToken: data.refresh_token, status: 'authenticated' })
           await get().fetchProfile()
         } catch (e) {
-          set({ status: 'unauthenticated', error: (e as Error).message })
+          set({ status: 'unauthenticated', error: e as Error })
           throw e
         }
       },

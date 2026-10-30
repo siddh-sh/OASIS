@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { AppLayout } from '@/components/AppLayout'
+import { RequireAdmin } from '@/components/RequireAdmin'
 import { RequireAuth } from '@/components/RequireAuth'
 import { useGeoLanguage } from '@/hooks/useGeoLanguage'
 import { AdminPage } from '@/pages/AdminPage'
@@ -57,7 +58,14 @@ function App() {
         <Route path="/correlation" element={<CorrelationPage />} />
         <Route path="/alerts" element={<RiskAlertsPage />} />
         <Route path="/chat" element={<ChatbotPage />} />
-        <Route path="/admin" element={<AdminPage />} />
+        <Route
+          path="/admin"
+          element={
+            <RequireAdmin>
+              <AdminPage />
+            </RequireAdmin>
+          }
+        />
         <Route path="/settings" element={<SettingsPage />} />
       </Route>
 

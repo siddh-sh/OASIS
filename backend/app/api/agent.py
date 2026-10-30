@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from app.agents.llm import LLMNotConfigured, llm_available
+from app.agents.llm import LANGUAGE_PATTERN, LLMNotConfigured, llm_available
 from app.agents.nl_chatbot_coordinator import chat as run_chat
 from app.agents.nl_chatbot_coordinator import get_conversation as load_conversation
 from app.core.security import optional_user
@@ -23,6 +23,8 @@ router = APIRouter(prefix="/api/agent", tags=["agent"])
 class ChatRequest(BaseModel):
     conversation_id: int | None = None
     message: str = Field(min_length=1, max_length=2000)
+    # The UI language; the answer is written in it (see llm.language_instruction).
+    language: str = Field(default="en", pattern=LANGUAGE_PATTERN)
 
 
 class ChatMessage(BaseModel):
@@ -33,6 +35,9 @@ class ChatMessage(BaseModel):
     # match the contract the frontend was built against in Phase 3, which
     # already renders these through its SourceCitation component.
     sources: list[str] = []
+    # Set when the pipeline failed and `content` is the canned English
+    # fallback, so the UI can show that message in the reader's language.
+    fallback_code: str | None = None
 
 
 class ChatResponse(BaseModel):
@@ -63,6 +68,7 @@ def chat(
             message=body.message,
             conversation_id=body.conversation_id,
             user_id=profile.user_id if profile else None,
+            language=body.language,
         )
     except LLMNotConfigured as exc:
         raise HTTPException(503, str(exc)) from exc
@@ -71,7 +77,10 @@ def chat(
     return ChatResponse(
         conversation_id=result["conversation_id"],
         message=ChatMessage(
-            role="assistant", content=result["answer"], sources=result["tools_used"]
+            role="assistant",
+            content=result["answer"],
+            sources=result["tools_used"],
+            fallback_code=result.get("fallback_code"),
         ),
     )
 

@@ -15,11 +15,13 @@ export interface AnomalyEvent {
 }
 
 export interface Recommendation {
-  id: number
+  /** Null for non-English narratives, which the backend caches in memory
+   *  rather than in the recommendations table. */
+  id: number | null
   ml_prediction_id: number | null
   anomaly_event_id: number | null
   narrative: string
-  created_at: string
+  created_at: string | null
   cached: boolean
 }
 
@@ -72,6 +74,8 @@ export interface CatchDecline {
   species_id: number
   scientific_name: string | null
   common_name: string | null
+  /** Name in the requested language (recorded, or the English name written phonetically). */
+  vernacular_name?: string | null
   slope_tonnes_per_year: number
   pct_per_year: number
   n_years: number
@@ -99,9 +103,15 @@ export interface CorrelationResult {
   significant: boolean
   points: { month: string; x: number; y: number }[]
   // Sample-size and spatial-mean caveats from the backend. Rendered, not
-  // dropped — a coefficient over ~25 months needs its context.
+  // dropped — a coefficient over ~25 months needs its context. `notes` is
+  // English prose; the UI renders `note_codes` in the reader's language.
   notes: string[]
+  note_codes?: CorrelationNote[]
 }
+
+export type CorrelationNote =
+  | { code: 'region_ignored' | 'spatial_means' | 'chlorophyll_median' }
+  | { code: 'too_few_months' | 'indicative'; n: number }
 
 export const analyticsApi = {
   anomalies: (params: { region?: string; domain?: string } = {}) =>
@@ -118,9 +128,9 @@ export const analyticsApi = {
   forecastOcean: (params: { station_id: number; variable: string; horizon?: number }) =>
     apiFetch<OceanForecast>(`/api/analytics/forecast/ocean-conditions${toQuery(params)}`),
 
-  catchDecline: (limit = 20) =>
-    apiFetch<CatchDecline[]>(`/api/analytics/anomalies/catch-decline${toQuery({ limit })}`),
+  catchDecline: (limit = 20, language?: string) =>
+    apiFetch<CatchDecline[]>(`/api/analytics/anomalies/catch-decline${toQuery({ limit, language })}`),
 
-  recommendation: (targetId: number, refresh = false) =>
-    apiFetch<Recommendation>(`/api/analytics/recommendation/${targetId}${toQuery({ refresh })}`),
+  recommendation: (targetId: number, language = 'en', refresh = false) =>
+    apiFetch<Recommendation>(`/api/analytics/recommendation/${targetId}${toQuery({ refresh, language })}`),
 }

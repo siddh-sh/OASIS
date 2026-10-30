@@ -1,15 +1,17 @@
 import clsx from 'clsx'
 import { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
+import { LanguageSwitcher } from '@/components/LanguageSwitcher'
 import { Close, Menu } from './icons'
 
 const SECTION_LINKS = [
-  { href: '#top', label: 'Home' },
-  { href: '#explore', label: 'Explore Oceans' },
-  { href: '#fisheries', label: 'Fisheries' },
-  { href: '#biodiversity', label: 'Biodiversity' },
-  { href: '#mission', label: 'About' },
-]
+  { href: '#top', key: 'home' },
+  { href: '#explore', key: 'explore' },
+  { href: '#fisheries', key: 'fisheries' },
+  { href: '#biodiversity', key: 'biodiversity' },
+  { href: '#mission', key: 'about' },
+] as const
 
 export function OasisEmblem({ size = 36 }: { size?: number }) {
   return (
@@ -34,16 +36,18 @@ export function OasisEmblem({ size = 36 }: { size?: number }) {
 // Always Log in / Sign up, even for a signed-in visitor: LoginPage already
 // forwards an authenticated session straight to /dashboard.
 export function AuthActions({ compact = false }: { compact?: boolean }) {
+  const { t } = useTranslation()
   const size = compact ? 'px-3.5 py-1.5 text-[13px]' : 'px-4 py-2 text-sm'
   return (
     <div className="flex items-center gap-2">
-      <Link to="/login" className={clsx('btn-ghost rounded-full', size)}>Log in</Link>
-      <Link to="/login?mode=signup" data-cursor="primary" className={clsx('btn-primary rounded-full', size)}>Sign up</Link>
+      <Link to="/login" className={clsx('btn-ghost rounded-full', size)}>{t('home.nav.logIn')}</Link>
+      <Link to="/login?mode=signup" data-cursor="primary" className={clsx('btn-primary rounded-full', size)}>{t('home.nav.signUp')}</Link>
     </div>
   )
 }
 
 export function HomeNav() {
+  const { t } = useTranslation()
   const [scrolled, setScrolled] = useState(false)
   const [open, setOpen] = useState(false)
 
@@ -63,12 +67,12 @@ export function HomeNav() {
 
   return (
     <header className={clsx('nav-shell fixed inset-x-0 top-0 z-50', (scrolled || open) && 'is-scrolled')}>
-      <nav className="mx-auto flex max-w-7xl items-center gap-4 px-4 py-3 sm:px-6 lg:px-8" aria-label="Primary">
-        <a href="#top" className="flex items-center gap-2.5" aria-label="OASIS home">
+      <nav className="mx-auto flex max-w-7xl items-center gap-4 px-4 py-3 sm:px-6 lg:px-8" aria-label={t('home.nav.primary')}>
+        <a href="#top" className="flex items-center gap-2.5" aria-label={t('home.nav.homeLabel')}>
           <OasisEmblem />
           <span className="leading-tight">
             <span className="block text-lg font-semibold tracking-[0.18em]">OASIS</span>
-            <span className="hidden text-[10.5px] tracking-wide text-[var(--muted)] sm:block">Ocean Intelligence Platform</span>
+            <span className="hidden text-[10.5px] tracking-wide text-[var(--muted)] sm:block">{t('home.nav.platform')}</span>
           </span>
         </a>
 
@@ -76,17 +80,18 @@ export function HomeNav() {
           {SECTION_LINKS.map((l) => (
             <li key={l.href}>
               <a href={l.href} className="rounded-full px-3.5 py-2 text-sm text-[var(--muted)] transition-colors hover:text-[var(--white)]">
-                {l.label}
+                {t(`home.nav.${l.key}`)}
               </a>
             </li>
           ))}
         </ul>
 
         <div className="ml-auto flex items-center gap-2 lg:ml-0">
+          <div className="hidden xl:block"><LanguageSwitcher /></div>
           <div className="hidden sm:block"><AuthActions /></div>
           <div className="sm:hidden"><AuthActions compact /></div>
           <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} aria-controls="home-mobile-menu"
-            aria-label={open ? 'Close menu' : 'Open menu'}
+            aria-label={open ? t('header.closeMenu') : t('header.openMenu')}
             className="flex h-10 w-10 items-center justify-center rounded-full text-[var(--white)] hover:bg-white/5 lg:hidden">
             {open ? <Close /> : <Menu />}
           </button>
@@ -95,11 +100,12 @@ export function HomeNav() {
 
       {open && (
         <ul id="home-mobile-menu" className="mx-auto flex max-w-7xl flex-col gap-1 px-4 pb-4 lg:hidden">
+          <li className="px-4 pb-2 xl:hidden"><LanguageSwitcher /></li>
           {SECTION_LINKS.map((l) => (
             <li key={l.href}>
               <a href={l.href} onClick={() => setOpen(false)}
                 className="block rounded-xl px-4 py-3 text-base text-[var(--white)] hover:bg-white/5">
-                {l.label}
+                {t(`home.nav.${l.key}`)}
               </a>
             </li>
           ))}

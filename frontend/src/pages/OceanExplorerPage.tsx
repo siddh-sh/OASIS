@@ -11,15 +11,17 @@ import { ApiError } from '@/api/client'
 import { oceanApi } from '@/api/ocean'
 import { regionsApi } from '@/api/regions'
 import { useOceanReadings, useOceanStations } from '@/hooks/useOceanData'
+import { placeName } from '@/i18n/dynamic'
+import { useFormat } from '@/i18n/format'
 import type { StationType } from '@/types/api'
 
-const FORECASTABLE_VARIABLES = [
-  { value: 'sst', label: 'Sea surface temperature' },
-  { value: 'chlorophyll_a', label: 'Chlorophyll-a' },
-] as const
+// Internal values only; labels come from `ocean.variable.<value>`.
+const FORECASTABLE_VARIABLES = ['sst', 'chlorophyll_a'] as const
+const STATION_TYPES: StationType[] = ['coastal-anchor', 'in-situ-buoy', 'satellite-grid']
 
 export function OceanExplorerPage() {
   const { t } = useTranslation()
+  const fmt = useFormat()
   const [stationType, setStationType] = useState<StationType | ''>('')
   const [selectedStation, setSelectedStation] = useState<number>()
   const [forecastVariable, setForecastVariable] = useState<'sst' | 'chlorophyll_a'>('sst')
@@ -42,6 +44,7 @@ export function OceanExplorerPage() {
     queryFn: () => regionsApi.list(),
     staleTime: Infinity,
   })
+  const namedStations = (stations.data?.items ?? []).filter((s) => s.name)
   const readingByStation = new Map((latestReadings.data ?? []).map((r) => [r.station_id, r]))
   const regionNameById = new Map((regions.data ?? []).map((r) => [r.region_id, r.name]))
   const forecast = useQuery({
@@ -53,10 +56,12 @@ export function OceanExplorerPage() {
   })
   const forecastUnavailable = forecast.error instanceof ApiError && forecast.error.status === 404
 
+  const sstLabel = t('ocean.series.sst')
+  const chlaLabel = t('ocean.series.chlorophyll_a')
   const chartData = [...(readings.data?.items ?? [])]
     .reverse()
     .map((r) => ({
-      date: new Date(r.timestamp).toLocaleDateString(),
+      date: fmt.date(r.timestamp),
       sst: r.sst,
       chlorophyll_a: r.chlorophyll_a,
     }))
@@ -70,26 +75,53 @@ export function OceanExplorerPage() {
 
       <div className="flex gap-6">
         <FilterSidebar>
-          <FilterField label="Station type">
+          <FilterField label={t('ocean.stationType')}>
             <select
               value={stationType}
               onChange={(e) => setStationType(e.target.value as StationType | '')}
               className="rounded-md border border-ocean-300 px-2 py-1.5 text-sm dark:border-ocean-700 dark:bg-ocean-950"
             >
-              <option value="">All</option>
-              <option value="coastal-anchor">Coastal anchor</option>
-              <option value="in-situ-buoy">In-situ buoy</option>
-              <option value="satellite-grid">Satellite grid</option>
+              <option value="">{t('common.all')}</option>
+              {STATION_TYPES.map((type) => (
+                <option key={type} value={type}>
+                  {t(`map.kind.${type}`)}
+                </option>
+              ))}
             </select>
           </FilterField>
-          <p className="text-xs text-ocean-500">{stations.data?.total ?? 0} stations matched</p>
+          <p className="text-xs text-ocean-500">
+            {t('ocean.stationsMatched', { count: stations.data?.total ?? 0, formatted: fmt.int(stations.data?.total ?? 0) })}
+          </p>
+          {/* Named stations listed by name: on the map they can sit close
+              enough to merge, and a list is quicker to scan than hovering. */}
+          {namedStations.length > 0 && (
+            <ul className="-mx-1 flex max-h-96 flex-col overflow-y-auto">
+              {namedStations.map((s) => (
+                <li key={s.station_id}>
+                  <button
+                    onClick={() => setSelectedStation(s.station_id)}
+                    className={
+                      s.station_id === selectedStation
+                        ? 'w-full rounded-md bg-ocean-600 px-2 py-1 text-left text-sm text-white'
+                        : 'w-full rounded-md px-2 py-1 text-left text-sm text-ocean-800 hover:bg-ocean-100 dark:text-ocean-200 dark:hover:bg-ocean-900'
+                    }
+                  >
+                    {placeName(s.name as string)}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
         </FilterSidebar>
 
         <div className="min-w-0 flex-1">
           <MapView
             legend
+            // Group markers only when there are too many to read singly
+            // (satellite grid cells); a few dozen stations stay individual.
+            cluster={(stations.data?.items.length ?? 0) > 60}
             markers={(stations.data?.items ?? []).map((s) => {
-              const name = s.name ?? `Station #${s.station_id}`
+              const name = s.name ? placeName(s.name) : t('ocean.stationNumber', { id: s.station_id })
               const region = s.region_id !== null ? regionNameById.get(s.region_id) : undefined
               const reading = readingByStation.get(s.station_id)
 
@@ -98,16 +130,18 @@ export function OceanExplorerPage() {
               // overlap, see data-pipeline's loader notes) still shows what
               // it has instead of an empty parenthetical.
               const readingParts: string[] = []
-              if (reading?.sst !== null && reading?.sst !== undefined) readingParts.push(`SST ${reading.sst.toFixed(1)}°C`)
-              if (reading?.chlorophyll_a !== null && reading?.chlorophyll_a !== undefined) {
-                readingParts.push(`Chl-a ${reading.chlorophyll_a.toFixed(2)} mg/m³`)
+              if (reading?.sst !== null && reading?.sst !== undefined) {
+                readingParts.push(t('ocean.hover.sst', { value: fmt.fixed(reading.sst, 1) }))
               }
-              const asOf = reading ? ` (as of ${new Date(reading.timestamp).toLocaleDateString()})` : ''
+              if (reading?.chlorophyll_a !== null && reading?.chlorophyll_a !== undefined) {
+                readingParts.push(t('ocean.hover.chlorophyll', { value: fmt.fixed(reading.chlorophyll_a, 2) }))
+              }
+              const asOf = reading ? ` (${t('ocean.hover.asOf', { date: fmt.date(reading.timestamp) })})` : ''
 
               const titleParts = [name]
-              if (region) titleParts.push(region)
+              if (region) titleParts.push(placeName(region))
               if (readingParts.length > 0) titleParts.push(readingParts.join(', ') + asOf)
-              if (s.station_id === selectedStation) titleParts.push('selected')
+              if (s.station_id === selectedStation) titleParts.push(t('ocean.hover.selected'))
 
               return {
                 id: s.station_id,
@@ -117,7 +151,7 @@ export function OceanExplorerPage() {
                 title: titleParts.join(' — '),
                 popup: (
                   <button className="text-xs font-medium underline" onClick={() => setSelectedStation(s.station_id)}>
-                    {name} — view readings
+                    {t('ocean.viewReadings', { name })}
                   </button>
                 ),
               }
@@ -130,7 +164,7 @@ export function OceanExplorerPage() {
       {selectedStation && (
         <div>
           <h2 className="mb-2 text-sm font-semibold text-ocean-700 dark:text-ocean-200">
-            Station #{selectedStation} readings
+            {t('ocean.readingsTitle', { id: selectedStation })}
           </h2>
           {readings.isLoading ? (
             <LoadingRows rows={3} />
@@ -139,12 +173,12 @@ export function OceanExplorerPage() {
               data={chartData}
               xKey="date"
               series={[
-                { key: 'sst', label: 'SST (°C)' },
-                { key: 'chlorophyll_a', label: 'Chlorophyll-a (mg/m³)' },
+                { key: 'sst', label: `${sstLabel} (°C)` },
+                { key: 'chlorophyll_a', label: `${chlaLabel} (mg/m³)` },
               ]}
             />
           ) : (
-            <p className="text-sm text-ocean-500">No readings for this station in range.</p>
+            <p className="text-sm text-ocean-500">{t('ocean.noReadings')}</p>
           )}
           <div className="mt-2 flex flex-wrap gap-1">
             {[...new Set((readings.data?.items ?? []).map((r) => r.source))].map((s) => (
@@ -154,24 +188,24 @@ export function OceanExplorerPage() {
 
           <div className="mt-4 rounded-lg border border-ocean-200 p-4 dark:border-ocean-800">
             <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
-              <h2 className="text-sm font-semibold text-ocean-700 dark:text-ocean-200">Short-term forecast</h2>
+              <h2 className="text-sm font-semibold text-ocean-700 dark:text-ocean-200">{t('ocean.forecast.title')}</h2>
               <div className="flex gap-2">
                 <label className="flex flex-col gap-1 text-xs text-ocean-500">
-                  Variable
+                  {t('ocean.forecast.variable')}
                   <select
                     value={forecastVariable}
                     onChange={(e) => setForecastVariable(e.target.value as 'sst' | 'chlorophyll_a')}
                     className="rounded-md border border-ocean-300 px-2 py-1 text-sm dark:border-ocean-700 dark:bg-ocean-950"
                   >
                     {FORECASTABLE_VARIABLES.map((v) => (
-                      <option key={v.value} value={v.value}>
-                        {v.label}
+                      <option key={v} value={v}>
+                        {t(`ocean.variable.${v}`)}
                       </option>
                     ))}
                   </select>
                 </label>
                 <label className="flex flex-col gap-1 text-xs text-ocean-500">
-                  Steps ahead
+                  {t('ocean.forecast.stepsAhead')}
                   <select
                     value={horizon}
                     onChange={(e) => setHorizon(Number(e.target.value))}
@@ -179,7 +213,7 @@ export function OceanExplorerPage() {
                   >
                     {[1, 3, 5, 10].map((h) => (
                       <option key={h} value={h}>
-                        {h} (×8 days)
+                        {t('ocean.forecast.stepOption', { count: h })}
                       </option>
                     ))}
                   </select>
@@ -191,8 +225,7 @@ export function OceanExplorerPage() {
               <LoadingRows rows={2} />
             ) : forecastUnavailable ? (
               <p className="text-sm text-ocean-500">
-                No usable {forecastVariable === 'sst' ? 'SST' : 'chlorophyll'} history for this station — satellite
-                chlorophyll in particular covers fewer stations than SST.
+                {t('ocean.forecast.noHistory', { variable: t(`ocean.variable.${forecastVariable}`) })}
               </p>
             ) : forecast.data ? (
               <div className="flex flex-col gap-3">
@@ -202,20 +235,18 @@ export function OceanExplorerPage() {
                       key={p.step}
                       className="flex flex-col items-center gap-1 rounded-md border border-ocean-200 px-3 py-2 text-xs dark:border-ocean-800"
                     >
-                      <span className="text-ocean-500">{new Date(p.timestamp).toLocaleDateString()}</span>
+                      <span className="text-ocean-500">{fmt.date(p.timestamp)}</span>
                       <span className="font-medium text-ocean-950 dark:text-ocean-50">
-                        {p.predicted_value.toFixed(2)}
+                        {fmt.fixed(p.predicted_value, 2)}
                         {forecastVariable === 'sst' ? '°C' : ' mg/m³'}
                       </span>
                     </li>
                   ))}
                 </ul>
                 <p className="text-xs text-ocean-500">
-                  Model skill vs. a no-change baseline:{' '}
-                  {(forecast.data.skill.skill_vs_persistence * 100).toFixed(0)}%
-                  {forecast.data.skill.skill_vs_persistence <= 0.1 &&
-                    ' — barely better than assuming tomorrow looks like today; read these numbers loosely.'}{' '}
-                  Each step compounds the last, so the further right, the less to trust it.
+                  {t('common.modelSkill', { value: fmt.int(forecast.data.skill.skill_vs_persistence * 100) })}
+                  {forecast.data.skill.skill_vs_persistence <= 0.1 && ` — ${t('ocean.forecast.weakSkill')}`}{' '}
+                  {t('ocean.forecast.compounds')}
                 </p>
               </div>
             ) : null}

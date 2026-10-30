@@ -12,12 +12,15 @@ export function LanguageSwitcher() {
   const { language, setLanguage } = useLocaleStore()
 
   return (
-    <label className="flex items-center gap-2 text-sm text-ocean-600 dark:text-ocean-300">
-      <span className="text-xs uppercase tracking-wide text-ocean-500">{t('header.language')}</span>
+    <label className="flex items-center gap-2 text-sm text-ocean-300">
+      <span className="hidden text-[10px] font-medium tracking-[0.16em] text-mist uppercase xl:inline">{t('header.language')}</span>
+      {/* Each option is written in its own script so a reader can find their
+          language whatever the current one is — deliberately not translated. */}
       <select
+        translate="no"
         value={language}
         onChange={(e) => setLanguage(e.target.value as LanguageCode)}
-        className="rounded-md border border-ocean-300 px-2 py-1 text-sm text-ocean-800 dark:border-ocean-700 dark:bg-ocean-900 dark:text-ocean-100"
+        className="glass-select"
       >
         {SUPPORTED_LANGUAGES.map((l) => (
           <option key={l.code} value={l.code}>

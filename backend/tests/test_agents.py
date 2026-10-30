@@ -93,7 +93,7 @@ def test_semantic_search_handles_category_questions(db_session):
 def test_chat_persists_the_conversation_without_calling_a_real_llm(db_session, monkeypatch):
     from app.agents import nl_chatbot_coordinator as coordinator
 
-    def fake_invoke(db, messages):
+    def fake_invoke(db, messages, language="en"):
         return {"messages": [AIMessage(content="There are 1482 species in the catalogue.")]}
 
     monkeypatch.setattr(coordinator, "graph_invoke", fake_invoke)
@@ -115,7 +115,7 @@ def test_chat_degrades_gracefully_when_the_model_emits_a_bad_tool_call(db_sessio
     # must not become a 500 mid-demo.
     from app.agents import nl_chatbot_coordinator as coordinator
 
-    def boom(db, messages):
+    def boom(db, messages, language="en"):
         raise RuntimeError("Error code: 400 - tool_use_failed: Failed to call a function.")
 
     monkeypatch.setattr(coordinator, "graph_invoke", boom)
@@ -125,13 +125,17 @@ def test_chat_degrades_gracefully_when_the_model_emits_a_bad_tool_call(db_sessio
     assert "malformed tool call" in result["answer"]
     # Crucially, it must not invent figures when no tool ran.
     assert "won't guess at numbers" in result["answer"]
+    # The UI renders the failure from this code, in the reader's language.
+    assert result["fallback_code"] == "malformed_tool_call"
 
 
 @requires_db
 def test_chat_rejects_an_unknown_conversation_id(db_session, monkeypatch):
     from app.agents import nl_chatbot_coordinator as coordinator
 
-    monkeypatch.setattr(coordinator, "graph_invoke", lambda db, m: {"messages": [AIMessage(content="hi")]})
+    monkeypatch.setattr(
+        coordinator, "graph_invoke", lambda db, m, language="en": {"messages": [AIMessage(content="hi")]}
+    )
     with pytest.raises(ValueError):
         coordinator.chat(db_session, "hello", conversation_id=999999999)
 

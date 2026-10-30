@@ -1,14 +1,7 @@
 import clsx from 'clsx'
 
 export function LoadingSkeleton({ className }: { className?: string }) {
-  return (
-    <div
-      className={clsx(
-        'animate-pulse rounded-md bg-ocean-200/60 dark:bg-ocean-800/60',
-        className,
-      )}
-    />
-  )
+  return <div className={clsx('skeleton-shimmer rounded-md', className)} />
 }
 
 export function LoadingRows({ rows = 5 }: { rows?: number }) {

@@ -1,5 +1,7 @@
 import json
+import re
 from datetime import datetime
+from difflib import SequenceMatcher
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from geoalchemy2.functions import ST_AsGeoJSON, ST_Contains
@@ -7,7 +9,7 @@ from geoalchemy2.types import Geometry
 from sqlalchemy import cast, func, select
 from sqlalchemy.orm import Session
 
-from app.agents.llm import LLMNotConfigured, llm_available
+from app.agents.llm import LANGUAGE_PATTERN, LLMNotConfigured, language_instruction, llm_available
 from app.db.models import Region, Species, SpeciesOccurrence, SpeciesVernacularName
 from app.db.session import get_db
 from app.schemas.common import BBox
@@ -27,11 +29,116 @@ def _non_ascii_count(name: str) -> int:
     return sum(1 for ch in name if ord(ch) > 127)
 
 
-def _best_vernacular_name(candidates: list[tuple[str, str]]) -> tuple[str, str]:
-    """Several sources often list both a native-script and a romanised form
-    for the same language; the native-script one is what a reader of that
-    language actually recognises, so it wins."""
-    return max(candidates, key=lambda c: (_non_ascii_count(c[0]), -len(c[0])))
+# Rough Devanagari → Latin, only to pair a native-script name with the
+# romanised spelling FishBase lists beside it (बांगदा ↔ "Bangada"). Not a
+# transliteration scheme — just close enough for a similarity ratio.
+_DEVANAGARI = {
+    **dict.fromkeys("कक़", "k"), "ख": "kh", "ग": "g", "घ": "gh", "ङ": "n", "च": "ch", "छ": "chh",
+    "ज": "j", "झ": "jh", "ञ": "n", "ट": "t", "ठ": "th", "ड": "d", "ड़": "d", "ढ": "dh", "ण": "n",
+    "त": "t", "थ": "th", "द": "d", "ध": "dh", "न": "n", "प": "p", "फ": "ph", "ब": "b", "भ": "bh",
+    "म": "m", "य": "y", "र": "r", "ल": "l", "ळ": "l", "ऴ": "l", "व": "v", "श": "sh", "ष": "sh",
+    "स": "s", "ह": "h",
+}
+_VOWELS = {
+    "अ": "a", "आ": "a", "इ": "i", "ई": "i", "उ": "u", "ऊ": "u", "ए": "e", "ऐ": "ai", "ओ": "o", "औ": "au",
+    "ा": "a", "ि": "i", "ी": "i", "ु": "u", "ू": "u", "े": "e", "ै": "ai", "ो": "o", "ौ": "au",
+    "ं": "n", "ँ": "n", "ॉ": "o", "ॅ": "e",
+}
+
+
+def _romanise(name: str) -> str:
+    out: list[str] = []
+    for i, ch in enumerate(name):
+        if ch in _DEVANAGARI:
+            out.append(_DEVANAGARI[ch])
+            nxt = name[i + 1] if i + 1 < len(name) else ""
+            if nxt not in _VOWELS and nxt != "्" and nxt != "़":
+                out.append("a")  # inherent vowel
+        elif ch in _VOWELS:
+            out.append(_VOWELS[ch])
+    return "".join(out)
+
+
+# Invisible formatting characters that some source rows carry (e.g. U+206E
+# in a Tamil FishBase entry). ZWJ/ZWNJ (U+200C/D) are kept: Indic scripts
+# need them to shape conjuncts correctly.
+_INVISIBLE = re.compile("[\u200B\u200E\u200F\u202A-\u202E\u2060-\u206F\uFEFF]")
+
+
+def _clean(name: str) -> str:
+    return _INVISIBLE.sub("", name).strip()
+
+
+def _latin_key(text: str) -> str:
+    return "".join(c for c in text.lower() if c.isalpha()).replace("w", "v").replace("ee", "i").replace("oo", "u")
+
+
+# Source label of phonetic renderings of the English name ("Wahoo" → वाहू);
+# used only when no recorded regional name exists.
+TRANSLITERATION = "Transliteration"
+
+
+def _best_vernacular_name(candidates: list[tuple[str, str]]) -> tuple[str, str] | None:
+    """Pick the name a reader of the language would recognise, from the
+    (name, source) rows recorded for one species and language, in the order
+    the source listed them.
+
+    Romanised-only entries ("Tiger" for a prawn) are never chosen: a name
+    shown as Marathi must actually be in Marathi script. Then: a curated
+    Wikidata name wins; else, for Devanagari, a name whose romanised spelling
+    FishBase also lists — the established market name appears in both
+    scripts (बांगदा / Bangada) while one-off local variants usually appear
+    once — preferring the pairing listed earliest. Picking simply the most
+    non-Latin characters, as this used to, chose obscure variants
+    (काउळागीदार over बांगदा for Indian mackerel).
+    """
+    native = [c for c in candidates if _non_ascii_count(c[0]) > 0 and c[1] != TRANSLITERATION]
+    if not native:
+        # No recorded name in this language: fall back to the English name
+        # written phonetically in its script (transliterate_common_names.py),
+        # which is labelled as such wherever it is shown.
+        return next((c for c in candidates if c[1] == TRANSLITERATION), None)
+    curated = [c for c in native if c[1] == "Wikidata"]
+    if curated:
+        return curated[0]
+
+    romanised = [_latin_key(name) for name, _ in candidates if _non_ascii_count(name) == 0]
+    best: tuple[int, float, int] | None = None
+    best_candidate = None
+    for idx, (name, source) in enumerate(native):
+        key = _latin_key(_romanise(name))
+        if not key:
+            continue
+        for rank, roman in enumerate(romanised):
+            ratio = SequenceMatcher(None, key, roman).ratio()
+            if ratio >= 0.75:
+                score = (rank, -ratio, idx)  # earliest romanised pairing, closest match, earliest native
+                if best is None or score < best:
+                    best, best_candidate = score, (name, source)
+    if best_candidate:
+        return best_candidate
+    return max(native, key=lambda c: (_non_ascii_count(c[0]), -len(c[0])))
+
+
+def vernacular_names(db: Session, species_ids: list[int], language: str) -> dict[int, str]:
+    """Best sourced regional-language name per species, for a batch of ids in
+    one query. Species with no name in `language` are simply absent — the
+    caller falls back to the English common name, never a translation."""
+    if not species_ids:
+        return {}
+    rows = db.execute(
+        select(SpeciesVernacularName.species_id, SpeciesVernacularName.name, SpeciesVernacularName.source)
+        .where(
+            SpeciesVernacularName.species_id.in_(species_ids),
+            SpeciesVernacularName.language_code == language,
+        )
+        .order_by(SpeciesVernacularName.id)  # the order the source listed them
+    ).all()
+    by_species: dict[int, list[tuple[str, str]]] = {}
+    for species_id, name, source in rows:
+        by_species.setdefault(species_id, []).append((name, source))
+    picked = {sid: _best_vernacular_name(c) for sid, c in by_species.items()}
+    return {sid: _clean(p[0]) for sid, p in picked.items() if p}
 
 
 @router.get("", response_model=SpeciesPage)
@@ -66,20 +173,9 @@ def list_species(
     # would mean 50 extra round trips just to populate it in the current
     # language.
     if language and items:
-        vernacular_rows = db.execute(
-            select(SpeciesVernacularName.species_id, SpeciesVernacularName.name)
-            .where(
-                SpeciesVernacularName.species_id.in_([i.species_id for i in items]),
-                SpeciesVernacularName.language_code == language,
-            )
-        ).all()
-        by_species: dict[int, list[tuple[str, str]]] = {}
-        for species_id, name in vernacular_rows:
-            by_species.setdefault(species_id, []).append((name, ""))
+        names = vernacular_names(db, [i.species_id for i in items], language)
         for item in items:
-            candidates = by_species.get(item.species_id)
-            if candidates:
-                item.vernacular_name = _best_vernacular_name(candidates)[0]
+            item.vernacular_name = names.get(item.species_id)
 
     return SpeciesPage(items=items, total=total or 0, limit=limit, offset=offset)
 
@@ -152,10 +248,9 @@ def species_vernacular_names(species_id: int, db: Session = Depends(get_db)):
     well-known finfish; a language missing here means no source had a name
     for this species in it, not an oversight.
 
-    Where a species/language pair has several recorded spellings, the one
-    with the most non-Latin-script characters is preferred — several sources
-    list both a native-script and a romanised form, and the native-script
-    one is what a reader of that language actually recognises.
+    Where a species/language pair has several recorded spellings, one is
+    chosen by `_best_vernacular_name` — native script only, curated names
+    first, then the established name FishBase lists in both scripts.
     """
     species = db.get(Species, species_id)
     if species is None:
@@ -166,6 +261,7 @@ def species_vernacular_names(species_id: int, db: Session = Depends(get_db)):
         # "_none" is the loader's sentinel for "checked, nothing found" (see
         # load_vernacular_names.py) — real data only.
         .where(SpeciesVernacularName.species_id == species_id, SpeciesVernacularName.language_code != "_none")
+        .order_by(SpeciesVernacularName.id)
     ).all()
 
     by_language: dict[str, list[tuple[str, str]]] = {}
@@ -174,8 +270,9 @@ def species_vernacular_names(species_id: int, db: Session = Depends(get_db)):
 
     names = {}
     for language_code, candidates in by_language.items():
-        best_name, best_source = _best_vernacular_name(candidates)
-        names[language_code] = {"name": best_name, "source": best_source}
+        picked = _best_vernacular_name(candidates)
+        if picked:
+            names[language_code] = {"name": _clean(picked[0]), "source": picked[1]}
 
     return {"names": names}
 
@@ -230,7 +327,11 @@ def species_regions(species_id: int, db: Session = Depends(get_db)):
 
 
 @router.get("/{species_id}/context")
-def species_context(species_id: int, db: Session = Depends(get_db)):
+def species_context(
+    species_id: int,
+    language: str = Query(default="en", pattern=LANGUAGE_PATTERN, description="language for the explanation"),
+    db: Session = Depends(get_db),
+):
     """Why this species turns up where it does, from its own occurrence records.
 
     Summarises the environmental conditions actually recorded alongside the
@@ -303,7 +404,7 @@ def species_context(species_id: int, db: Session = Depends(get_db)):
     )
     try:
         explanation = get_llm(temperature=0.2).invoke(
-            [SystemMessage(content=prompt), HumanMessage(content=str(evidence))]
+            [SystemMessage(content=prompt + language_instruction(language)), HumanMessage(content=str(evidence))]
         ).content.strip()
     except LLMNotConfigured as exc:
         raise HTTPException(503, str(exc)) from exc

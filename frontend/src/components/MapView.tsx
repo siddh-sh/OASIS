@@ -7,7 +7,8 @@ import 'leaflet/dist/leaflet.css'
 import 'react-leaflet-cluster/dist/assets/MarkerCluster.css'
 import 'react-leaflet-cluster/dist/assets/MarkerCluster.Default.css'
 import { useState } from 'react'
-import { MapContainer, Marker, Polygon, Popup, TileLayer, useMapEvents } from 'react-leaflet'
+import { useTranslation } from 'react-i18next'
+import { MapContainer, Marker, Polygon, Popup, TileLayer, ZoomControl, useMapEvents } from 'react-leaflet'
 import MarkerClusterGroup from 'react-leaflet-cluster'
 
 // India coastal bbox center — matches the region every collector in
@@ -40,13 +41,14 @@ export type StationKind = 'satellite-grid' | 'coastal-anchor' | 'in-situ-buoy' |
 /**
  * Shape *and* colour differ per kind, never colour alone — roughly 1 in 12
  * men has some form of colour-vision deficiency, and red/green dots are the
- * common failure case.
+ * common failure case. Display names are `map.kind.<kind>` in the
+ * dictionaries.
  */
-export const STATION_STYLES: Record<StationKind, { label: string; color: string; shape: string }> = {
-  'satellite-grid': { label: 'Satellite grid cell', color: '#0e7490', shape: 'circle' },
-  'coastal-anchor': { label: 'Coastal station', color: '#b45309', shape: 'square' },
-  'in-situ-buoy': { label: 'Moored buoy', color: '#7c3aed', shape: 'diamond' },
-  occurrence: { label: 'Species occurrence', color: '#15803d', shape: 'circle' },
+export const STATION_STYLES: Record<StationKind, { color: string; shape: string }> = {
+  'satellite-grid': { color: '#0e7490', shape: 'circle' },
+  'coastal-anchor': { color: '#b45309', shape: 'square' },
+  'in-situ-buoy': { color: '#7c3aed', shape: 'diamond' },
+  occurrence: { color: '#15803d', shape: 'circle' },
 }
 
 function shapeCss(shape: string): string {
@@ -90,11 +92,24 @@ function escapeHtml(value: string): string {
   )
 }
 
-/** 4 dp ≈ 11 m — enough to identify a station, not so much it's noise. */
-export function formatCoords(lat: number, lon: number): string {
-  const ns = lat >= 0 ? 'N' : 'S'
-  const ew = lon >= 0 ? 'E' : 'W'
+export interface Hemispheres {
+  N: string
+  S: string
+  E: string
+  W: string
+}
+
+/** 4 dp ≈ 11 m — enough to identify a station, not so much it's noise.
+ *  Only the hemisphere letters are localised; the figures never change. */
+export function formatCoords(lat: number, lon: number, h: Hemispheres): string {
+  const ns = lat >= 0 ? h.N : h.S
+  const ew = lon >= 0 ? h.E : h.W
   return `${Math.abs(lat).toFixed(4)}° ${ns}, ${Math.abs(lon).toFixed(4)}° ${ew}`
+}
+
+function useHemispheres(): Hemispheres {
+  const { t } = useTranslation()
+  return { N: t('map.hemisphere.N'), S: t('map.hemisphere.S'), E: t('map.hemisphere.E'), W: t('map.hemisphere.W') }
 }
 
 export interface MapMarker {
@@ -129,7 +144,19 @@ interface MapViewProps {
  * the cursor actually is. Uses map-level mousemove, which works regardless of
  * what the cluster plugin does to marker events.
  */
+/** Leaflet hard-codes the popup close button's label as "Close popup";
+ *  relabel it in the UI language each time a popup opens. */
+function PopupCloseLabel() {
+  const { t } = useTranslation()
+  useMapEvents({
+    popupopen: (e) =>
+      e.popup.getElement()?.querySelector('.leaflet-popup-close-button')?.setAttribute('aria-label', t('map.closePopup')),
+  })
+  return null
+}
+
 function CursorCoords() {
+  const hemispheres = useHemispheres()
   const [pos, setPos] = useState<[number, number] | null>(null)
   useMapEvents({
     mousemove: (e) => setPos([e.latlng.lat, e.latlng.lng]),
@@ -137,8 +164,8 @@ function CursorCoords() {
   })
   if (!pos) return null
   return (
-    <div className="absolute bottom-4 left-3 z-[1000] rounded-md border border-ocean-200 bg-white/95 px-2 py-1 font-mono text-[11px] text-ocean-700 shadow dark:border-ocean-700 dark:bg-ocean-950/95 dark:text-ocean-300">
-      {formatCoords(pos[0], pos[1])}
+    <div className="absolute bottom-8 left-3 z-[1000] rounded-lg border border-[var(--glass-line)] bg-[rgba(4,29,43,0.86)] px-2.5 py-1 font-mono text-[11px] text-ocean-200 shadow-[var(--glass-shadow)] backdrop-blur-md">
+      {formatCoords(pos[0], pos[1], hemispheres)}
     </div>
   )
 }
@@ -152,8 +179,10 @@ export function MapView({
   legend = false,
   regionShapes,
 }: MapViewProps) {
+  const { t, i18n } = useTranslation()
+  const hemispheres = useHemispheres()
   const markerEls = markers.map((m) => {
-    const coords = formatCoords(m.lat, m.lon)
+    const coords = formatCoords(m.lat, m.lon, hemispheres)
     return (
       <Marker
         key={m.id}
@@ -177,7 +206,7 @@ export function MapView({
   )
 
   return (
-    <div style={{ height, position: 'relative' }}>
+    <div style={{ height, position: 'relative' }} data-lenis-prevent>
       <MapContainer
         center={center}
         zoom={zoom}
@@ -187,8 +216,17 @@ export function MapView({
         // cannot drag past it and snap back.
         maxBoundsViscosity={1.0}
         scrollWheelZoom
+        zoomControl={false}
         style={{ height: '100%', width: '100%' }}
       >
+        {/* Leaflet builds the control once, so it is re-keyed on the
+            language to pick up the translated button titles. */}
+        <ZoomControl
+          key={i18n.language}
+          position="topleft"
+          zoomInTitle={t('map.zoomIn')}
+          zoomOutTitle={t('map.zoomOut')}
+        />
         <TileLayer
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
@@ -208,14 +246,15 @@ export function MapView({
         ))}
         {cluster ? <MarkerClusterGroup chunkedLoading>{markerEls}</MarkerClusterGroup> : markerEls}
         <CursorCoords />
+        <PopupCloseLabel />
       </MapContainer>
 
       {legend && kindsPresent.length > 0 && (
-        <div className="absolute bottom-4 right-3 z-[1000] rounded-md border border-ocean-200 bg-white/95 px-3 py-2 text-xs shadow dark:border-ocean-700 dark:bg-ocean-950/95">
-          <div className="mb-1 font-medium text-ocean-950 dark:text-ocean-50">Station type</div>
+        <div className="absolute right-3 bottom-8 z-[1000] rounded-xl border border-[var(--glass-line)] bg-[rgba(4,29,43,0.86)] px-3.5 py-2.5 text-xs shadow-[var(--glass-shadow)] backdrop-blur-md">
+          <div className="mb-1.5 text-[10px] font-semibold tracking-[0.16em] text-turquoise uppercase">{t('map.legendTitle')}</div>
           <ul className="flex flex-col gap-1">
             {kindsPresent.map((k) => (
-              <li key={k} className="flex items-center gap-2 text-ocean-600 dark:text-ocean-300">
+              <li key={k} className="flex items-center gap-2 text-ocean-100">
                 <span
                   style={{
                     display: 'inline-block',
@@ -231,7 +270,7 @@ export function MapView({
                     ...(STATION_STYLES[k].shape === 'circle' ? { borderRadius: 9999 } : {}),
                   }}
                 />
-                {STATION_STYLES[k].label}
+                {t(`map.kind.${k}`)}
               </li>
             ))}
           </ul>

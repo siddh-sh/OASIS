@@ -27,6 +27,8 @@ export interface Forecast {
     pressure_hpa: number | null
     is_day: boolean
     condition: string
+    /** WMO code; the UI translates from this, `condition` is the English fallback. */
+    weather_code: number | null
     uv_index_max_today: number | null
   }
   hourly: {
@@ -34,10 +36,12 @@ export interface Forecast {
     temperature_c: number | null
     precipitation_probability_pct: number | null
     condition: string
+    weather_code: number | null
   }[]
   daily: {
     date: string
     condition: string
+    weather_code: number | null
     temp_max_c: number | null
     temp_min_c: number | null
     precipitation_mm: number | null

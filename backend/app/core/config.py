@@ -34,6 +34,14 @@ class Settings(BaseSettings):
     llm_api_key: str = ""
     llm_base_url: str = "https://api.groq.com/openai/v1"
     llm_model: str = "openai/gpt-oss-120b"
+    # Used when the primary model is rate-limited or unavailable. On Groq
+    # each model has its own daily token allowance, so a second model keeps
+    # the chatbot answering after the first one's free quota runs out.
+    llm_fallback_model: str = "openai/gpt-oss-20b"
+    # "low" | "medium" | "high" for reasoning models (gpt-oss); "" to omit.
+    # Hidden reasoning tokens count against the provider's quota — low
+    # effort roughly halves a typical answer's token use.
+    llm_reasoning_effort: str = "low"
 
     # CORS: local Vite dev origin always allowed; add the deployed Vercel
     # origin via this env var once known (comma-separated).
